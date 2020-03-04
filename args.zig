@@ -100,7 +100,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
     return result;
 }
 
-fn ParseArgsResult(comptime Spec: type) type {
+pub fn ParseArgsResult(comptime Spec: type) type {
     return struct {
         const Self = @This();
 
