@@ -20,16 +20,33 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                 // double hyphen is considered 'everything from here now is positional'
                 break;
             }
+
+            const Pair = struct {
+                name: []const u8,
+                value: ?[]const u8,
+            };
+
+            const pair = if (std.mem.indexOf(u8, item, "=")) |index|
+                Pair{
+                    .name = item[2..index],
+                    .value = item[index + 1 ..],
+                }
+            else
+                Pair{
+                    .name = item[2..],
+                    .value = null,
+                };
+
             var found = false;
             inline for (std.meta.fields(Spec)) |fld| {
-                if (std.mem.eql(u8, item[2..], fld.name)) {
-                    try parseOption(Spec, &result, args, fld.field_type, fld.name);
+                if (std.mem.eql(u8, pair.name, fld.name)) {
+                    try parseOption(Spec, &result, args, fld.field_type, fld.name, pair.value);
                     found = true;
                 }
             }
 
             if (!found) {
-                try std.io.getStdErr().outStream().stream.print("Unknown command line option: {}\n", .{item});
+                try std.io.getStdErr().outStream().stream.print("Unknown command line option: {}\n", .{pair.name});
                 return error.EncounteredUnknownArgument;
             }
         } else if (std.mem.startsWith(u8, item, "-")) {
@@ -52,7 +69,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                                     return error.EncounteredUnexpectedArgument;
                                 }
 
-                                try parseOption(Spec, &result, args, real_fld.field_type, real_fld.name);
+                                try parseOption(Spec, &result, args, real_fld.field_type, real_fld.name, null);
 
                                 found = true;
                             }
@@ -135,15 +152,25 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
     }
 }
 
-fn parseOption(comptime Spec: type, _result: *ParseArgsResult(Spec), _args: *std.process.ArgIterator, comptime field_type: type, comptime name: []const u8) !void {
+fn parseOption(
+    comptime Spec: type,
+    _result: *ParseArgsResult(Spec),
+    _args: *std.process.ArgIterator,
+    comptime field_type: type,
+    comptime name: []const u8,
+    value: ?[]const u8,
+) !void {
     @field(_result.options, name) = if (requiresArg(field_type)) blk: {
-        const argval = try (_args.next(&_result.arena.allocator) orelse {
-            try std.io.getStdErr().outStream().stream.print(
-                "Missing argument for {}.\n",
-                .{name},
-            );
-            return error.MissingArgument;
-        });
+        const argval = if (value) |val|
+            val
+        else
+            try (_args.next(&_result.arena.allocator) orelse {
+                try std.io.getStdErr().outStream().stream.print(
+                    "Missing argument for {}.\n",
+                    .{name},
+                );
+                return error.MissingArgument;
+            });
 
         break :blk convertArgumentValue(field_type, argval) catch |err| {
             try outputParseError(name, err);

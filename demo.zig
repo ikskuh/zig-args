@@ -1,5 +1,5 @@
 const std = @import("std");
-const argsParser = @import("args");
+const argsParser = @import("args.zig");
 
 pub fn main() !void {
     var args = std.process.args();

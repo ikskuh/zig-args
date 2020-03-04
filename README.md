@@ -7,6 +7,7 @@ Simple-to-use argument parser with struct-based config
     - Everything after the first `--` is assumed to be a positional argument
     - A single `-` is interpreted as a positional argument which can be used as the stdin/stdout file placeholder
     - Short options with no argument can be combined into a single argument: `-dfe`
+    - Long options can use either `--option=value` or `--option value` syntax
 - Integrated support for primitive types:
     - All integer types (signed & unsigned)
     - Floating point types
