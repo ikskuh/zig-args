@@ -65,7 +65,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
             var found = false;
             inline for (std.meta.fields(Spec)) |fld| {
                 if (std.mem.eql(u8, pair.name, fld.name)) {
-                    try parseOption(Spec, &result, args, fld.field_type, fld.name, pair.value);
+                    try parseOption(Spec, &result, args, fld.name, pair.value);
                     found = true;
                 }
             }
@@ -94,7 +94,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                                     return error.EncounteredUnexpectedArgument;
                                 }
 
-                                try parseOption(Spec, &result, args, real_fld.field_type, real_fld.name, null);
+                                try parseOption(Spec, &result, args, real_fld.name, null);
 
                                 found = true;
                             }
@@ -152,6 +152,7 @@ pub fn ParseArgsResult(comptime Spec: type) type {
     };
 }
 
+/// Returns true if the given type requires an argument to be parsed.
 fn requiresArg(comptime T: type) bool {
     const H = struct {
         fn doesArgTypeRequireArg(comptime Type: type) bool {
@@ -174,12 +175,34 @@ fn requiresArg(comptime T: type) bool {
     }
 }
 
+/// Parses a boolean option.
+fn parseBoolean(str: []const u8) !bool {
+    return if (std.mem.eql(u8, str, "yes"))
+        true
+    else if (std.mem.eql(u8, str, "true"))
+        true
+    else if (std.mem.eql(u8, str, "y"))
+        true
+    else if (std.mem.eql(u8, str, "no"))
+        false
+    else if (std.mem.eql(u8, str, "false"))
+        false
+    else if (std.mem.eql(u8, str, "n"))
+        false
+    else
+        return error.NotABooleanValue;
+}
+
+/// Converts an argument value to the target type.
 fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
     if (T == []const u8)
         return textInput;
     switch (@typeInfo(T)) {
         .Optional => |opt| return try convertArgumentValue(opt.child, textInput),
-        .Bool => return true, // boolean options are always true
+        .Bool => if (textInput.len > 0)
+            return try parseBoolean(textInput)
+        else
+            return true, // boolean options are always true
         .Int => |int| return if (int.is_signed)
             try std.fmt.parseInt(T, textInput, 10)
         else
@@ -190,19 +213,23 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
     }
 }
 
+/// Parses an option value into the correct type.
 fn parseOption(
     comptime Spec: type,
-    _result: *ParseArgsResult(Spec),
-    _args: *std.process.ArgIterator,
-    comptime field_type: type,
+    result: *ParseArgsResult(Spec),
+    args: *std.process.ArgIterator,
+    /// The name of the option that is currently parsed.
     comptime name: []const u8,
+    /// Optional pre-defined value for options that use `--foo=bar`
     value: ?[]const u8,
 ) !void {
-    @field(_result.options, name) = if (requiresArg(field_type)) blk: {
+    const field_type = @TypeOf(@field(result.options, name));
+
+    @field(result.options, name) = if (requiresArg(field_type)) blk: {
         const argval = if (value) |val|
             val
         else
-            try (_args.next(&_result.arena.allocator) orelse {
+            try (args.next(&result.arena.allocator) orelse {
                 try std.io.getStdErr().outStream().stream.print(
                     "Missing argument for {}.\n",
                     .{name},
@@ -215,12 +242,13 @@ fn parseOption(
             return err;
         };
     } else
-        convertArgumentValue(field_type, "") catch |err| {
+        convertArgumentValue(field_type, if (value) |val| val else "") catch |err| {
         try outputParseError(name, err);
         return err;
     }; // argument is "empty"
 }
 
+/// Helper function that will print an error message when a value could not be parsed, then return the same error again
 fn outputParseError(option: []const u8, err: var) !void {
     try std.io.getStdErr().outStream().stream.print("Failed to parse option {}: {}\n", .{
         option,

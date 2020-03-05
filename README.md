@@ -11,7 +11,7 @@ Simple-to-use argument parser with struct-based config
 - Integrated support for primitive types:
     - All integer types (signed & unsigned)
     - Floating point types
-    - Booleans (takes no argument)
+    - Booleans (takes optional argument. If no argument given, the bool is set, otherwise, one of `yes`, `true`, `y`, `no`, `false`, `n` is interpreted)
     - Strings
     - Enumerations
 
