@@ -1,11 +1,36 @@
 const std = @import("std");
 
-/// Parses arguments for the given specification
+/// Parses arguments for the given specification and our current process.
+/// - `Spec` is the configuration of the arguments.
+/// - `allocator` is the allocator that is used to allocate all required memory
+pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
+    var args = std.process.args();
+
+    const exeName = try (args.next(allocator) orelse {
+        try std.io.getStdErr().outStream().stream.write("Failed to get executable name from the argument list!\n");
+        return error.NoExecutableName;
+    });
+    errdefer allocator.free(exeName);
+
+    var result = try parse(Spec, &args, allocator);
+
+    result.exeName = exeName;
+
+    return result;
+}
+
+/// Parses arguments for the given specification.
+/// - `Spec` is the configuration of the arguments.
+/// - `args` is an ArgIterator that will yield the command line arguments.
+/// - `allocator` is the allocator that is used to allocate all required memory
+///
+/// Note that `.exeName` in the result will not be set!
 pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
     var result = ParseArgsResult(Spec){
         .arena = std.heap.ArenaAllocator.init(allocator),
         .options = Spec{},
-        .args = undefined,
+        .positionals = undefined,
+        .exeName = null,
     };
     errdefer result.arena.deinit();
 
@@ -96,20 +121,32 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
         try arglist.append(item);
     }
 
-    result.args = arglist.toOwnedSlice();
+    result.positionals = arglist.toOwnedSlice();
     return result;
 }
 
+/// The return type of the argument parser.
 pub fn ParseArgsResult(comptime Spec: type) type {
     return struct {
         const Self = @This();
 
         arena: std.heap.ArenaAllocator,
+
+        /// The options with either default or set values.
         options: Spec,
-        args: [][]const u8,
+
+        /// The positional arguments that were passed to the process.
+        positionals: [][]const u8,
+
+        /// Name of the executable file (or: zeroth argument)
+        exeName: ?[]const u8,
 
         fn deinit(self: Self) void {
-            self.arena.child_allocator.free(self.args);
+            self.arena.child_allocator.free(self.positionals);
+
+            if (self.exeName) |n|
+                self.arena.child_allocator.free(n);
+
             self.arena.deinit();
         }
     };

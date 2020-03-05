@@ -13,6 +13,7 @@ Simple-to-use argument parser with struct-based config
     - Floating point types
     - Booleans (takes no argument)
     - Strings
+    - Enumerations
 
 ## Example
 

@@ -2,17 +2,9 @@ const std = @import("std");
 const argsParser = @import("args.zig");
 
 pub fn main() !void {
-    var args = std.process.args();
-
     var argsAllocator = std.heap.direct_allocator;
 
-    const exeName = try (args.next(argsAllocator) orelse {
-        try std.io.getStdErr().outStream().stream.write("Failed to get executable name from the argument list!\n");
-        return;
-    });
-    defer argsAllocator.free(exeName);
-
-    const options = try argsParser.parse(struct {
+    const options = try argsParser.parseForCurrentProcess(struct {
         // This declares long options for double hyphen
         output: ?[]const u8 = null,
         @"with-offset": bool = false,
@@ -28,11 +20,21 @@ pub fn main() !void {
             .O = "with-offset",
             .o = "output",
         };
-    }, &args, argsAllocator);
+    }, argsAllocator);
     defer options.deinit();
 
-    std.debug.warn("parsed result:\n{}\npositionals:\n", .{options.options});
-    for (options.args) |arg| {
-        std.debug.warn("\t{}\n", .{arg});
+    std.debug.warn("executable name: {}\n", .{options.exeName});
+
+    std.debug.warn("parsed options:\n", .{});
+    inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
+        std.debug.warn("\t{} = {}\n", .{
+            fld.name,
+            @field(options.options, fld.name),
+        });
+    }
+
+    std.debug.warn("parsed positionals:\n", .{});
+    for (options.positionals) |arg| {
+        std.debug.warn("\t'{}'\n", .{arg});
     }
 }
