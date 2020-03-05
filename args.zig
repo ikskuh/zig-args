@@ -122,7 +122,7 @@ fn requiresArg(comptime T: type) bool {
                 return true;
 
             return switch (@as(std.builtin.TypeId, @typeInfo(Type))) {
-                .Int, .Float => true,
+                .Int, .Float, .Enum => true,
                 .Bool => false,
                 else => @compileError(@typeName(Type) ++ " is not a supported argument type!"),
             };
@@ -148,6 +148,7 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
         else
             try std.fmt.parseUnsigned(T, textInput, 10),
         .Float => return try std.fmt.parseFloat(T, textInput),
+        .Enum => return std.meta.stringToEnum(T, textInput) orelse return error.InvalidEnumeration,
         else => @compileError(@typeName(T) ++ " is not a supported argument type!"),
     }
 }

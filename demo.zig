@@ -19,6 +19,7 @@ pub fn main() !void {
         @"with-hexdump": bool = false,
         @"intermix-source": bool = false,
         numberOfBytes: ?i32 = null,
+        mode: enum { default, special, slow, fast } = .default,
 
         // This declares short-hand options for single hyphen
         pub const shorthands = .{
