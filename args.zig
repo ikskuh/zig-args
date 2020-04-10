@@ -7,7 +7,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
     var args = std.process.args();
 
     const exeName = try (args.next(allocator) orelse {
-        try std.io.getStdErr().outStream().stream.write("Failed to get executable name from the argument list!\n");
+        try std.io.getStdErr().outStream().writeAll("Failed to get executable name from the argument list!\n");
         return error.NoExecutableName;
     });
     errdefer allocator.free(exeName);
@@ -71,7 +71,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
             }
 
             if (!found) {
-                try std.io.getStdErr().outStream().stream.print("Unknown command line option: {}\n", .{pair.name});
+                try std.io.getStdErr().outStream().print("Unknown command line option: {}\n", .{pair.name});
                 return error.EncounteredUnknownArgument;
             }
         } else if (std.mem.startsWith(u8, item, "-")) {
@@ -90,7 +90,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
 
                                 // -2 because we stripped of the "-" at the beginning
                                 if (requiresArg(real_fld.field_type) and index != item.len - 2) {
-                                    try std.io.getStdErr().outStream().stream.write("An option with argument must be the last option for short command line options.\n");
+                                    try std.io.getStdErr().outStream().writeAll("An option with argument must be the last option for short command line options.\n");
                                     return error.EncounteredUnexpectedArgument;
                                 }
 
@@ -100,12 +100,12 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                             }
                         }
                         if (!found) {
-                            try std.io.getStdErr().outStream().stream.print("Unknown command line option: -{c}\n", .{char});
+                            try std.io.getStdErr().outStream().print("Unknown command line option: -{c}\n", .{char});
                             return error.EncounteredUnknownArgument;
                         }
                     }
                 } else {
-                    try std.io.getStdErr().outStream().stream.write("Short command line options are not supported.\n");
+                    try std.io.getStdErr().outStream().writeAll("Short command line options are not supported.\n");
                     return error.EncounteredUnsupportedArgument;
                 }
             }
@@ -230,7 +230,7 @@ fn parseOption(
             val
         else
             try (args.next(&result.arena.allocator) orelse {
-                try std.io.getStdErr().outStream().stream.print(
+                try std.io.getStdErr().outStream().print(
                     "Missing argument for {}.\n",
                     .{name},
                 );
@@ -250,7 +250,7 @@ fn parseOption(
 
 /// Helper function that will print an error message when a value could not be parsed, then return the same error again
 fn outputParseError(option: []const u8, err: var) !void {
-    try std.io.getStdErr().outStream().stream.print("Failed to parse option {}: {}\n", .{
+    try std.io.getStdErr().outStream().print("Failed to parse option {}: {}\n", .{
         option,
         @errorName(err),
     });
