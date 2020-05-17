@@ -6,15 +6,15 @@ const std = @import("std");
 pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
     var args = std.process.args();
 
-    const exeName = try (args.next(allocator) orelse {
+    const executable_name = try (args.next(allocator) orelse {
         try std.io.getStdErr().outStream().writeAll("Failed to get executable name from the argument list!\n");
         return error.NoExecutableName;
     });
-    errdefer allocator.free(exeName);
+    errdefer allocator.free(executable_name);
 
     var result = try parse(Spec, &args, allocator);
 
-    result.exeName = exeName;
+    result.executable_name = executable_name;
 
     return result;
 }
@@ -24,13 +24,13 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
 /// - `args` is an ArgIterator that will yield the command line arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 ///
-/// Note that `.exeName` in the result will not be set!
+/// Note that `.executable_name` in the result will not be set!
 pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
     var result = ParseArgsResult(Spec){
         .arena = std.heap.ArenaAllocator.init(allocator),
         .options = Spec{},
         .positionals = undefined,
-        .exeName = null,
+        .executable_name = null,
     };
     errdefer result.arena.deinit();
 
@@ -139,12 +139,12 @@ pub fn ParseArgsResult(comptime Spec: type) type {
         positionals: [][]const u8,
 
         /// Name of the executable file (or: zeroth argument)
-        exeName: ?[]const u8,
+        executable_name: ?[]const u8,
 
-        fn deinit(self: Self) void {
+        pub fn deinit(self: Self) void {
             self.arena.child_allocator.free(self.positionals);
 
-            if (self.exeName) |n|
+            if (self.executable_name) |n|
                 self.arena.child_allocator.free(n);
 
             self.arena.deinit();

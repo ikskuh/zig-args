@@ -2,7 +2,7 @@ const std = @import("std");
 const argsParser = @import("args.zig");
 
 pub fn main() !void {
-    var argsAllocator = std.heap.direct_allocator;
+    var argsAllocator = std.heap.page_allocator;
 
     const options = try argsParser.parseForCurrentProcess(struct {
         // This declares long options for double hyphen
@@ -23,7 +23,7 @@ pub fn main() !void {
     }, argsAllocator);
     defer options.deinit();
 
-    std.debug.warn("executable name: {}\n", .{options.exeName});
+    std.debug.warn("executable name: {}\n", .{options.executable_name});
 
     std.debug.warn("parsed options:\n", .{});
     inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
