@@ -37,7 +37,7 @@ const options = try argsParser.parse(struct {
 defer options.deinit();
 
 std.debug.warn("parsed result:\n{}\npositionals:\n", .{options.options});
-for (options.args) |arg| {
+for (options.positionals) |arg| {
     std.debug.warn("\t{}\n", .{arg});
 }
 ```
