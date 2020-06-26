@@ -23,18 +23,18 @@ pub fn main() !void {
     }, argsAllocator);
     defer options.deinit();
 
-    std.debug.warn("executable name: {}\n", .{options.executable_name});
+    std.debug.print("executable name: {}\n", .{options.executable_name});
 
-    std.debug.warn("parsed options:\n", .{});
+    std.debug.print("parsed options:\n", .{});
     inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
-        std.debug.warn("\t{} = {}\n", .{
+        std.debug.print("\t{} = {}\n", .{
             fld.name,
             @field(options.options, fld.name),
         });
     }
 
-    std.debug.warn("parsed positionals:\n", .{});
+    std.debug.print("parsed positionals:\n", .{});
     for (options.positionals) |arg| {
-        std.debug.warn("\t'{}'\n", .{arg});
+        std.debug.print("\t'{}'\n", .{arg});
     }
 }
