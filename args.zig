@@ -162,6 +162,7 @@ fn requiresArg(comptime T: type) bool {
             return switch (@as(std.builtin.TypeId, @typeInfo(Type))) {
                 .Int, .Float, .Enum => true,
                 .Bool => false,
+                .Struct, .Union => true,
                 else => @compileError(@typeName(Type) ++ " is not a supported argument type!"),
             };
         }
@@ -197,6 +198,7 @@ fn parseBoolean(str: []const u8) !bool {
 fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
     if (T == []const u8)
         return textInput;
+
     switch (@typeInfo(T)) {
         .Optional => |opt| return try convertArgumentValue(opt.child, textInput),
         .Bool => if (textInput.len > 0)
@@ -208,7 +210,20 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
         else
             try std.fmt.parseUnsigned(T, textInput, 10),
         .Float => return try std.fmt.parseFloat(T, textInput),
-        .Enum => return std.meta.stringToEnum(T, textInput) orelse return error.InvalidEnumeration,
+        .Enum => {
+            if (@hasDecl(T, "parse")) {
+                return try T.parse(textInput);
+            } else {
+                return std.meta.stringToEnum(T, textInput) orelse return error.InvalidEnumeration;
+            }
+        },
+        .Struct, .Union => {
+            if (@hasDecl(T, "parse")) {
+                return try T.parse(textInput);
+            } else {
+                @compileError(@typeName(T) ++ " has no public visible `fn parse([]const u8) !T`!");
+            }
+        },
         else => @compileError(@typeName(T) ++ " is not a supported argument type!"),
     }
 }
