@@ -264,7 +264,7 @@ fn parseOption(
 }
 
 /// Helper function that will print an error message when a value could not be parsed, then return the same error again
-fn outputParseError(option: []const u8, err: var) !void {
+fn outputParseError(option: []const u8, err: anytype) !void {
     try std.io.getStdErr().writer().print("Failed to parse option {}: {}\n", .{
         option,
         @errorName(err),
