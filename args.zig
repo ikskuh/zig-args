@@ -206,9 +206,9 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
         else
             return true, // boolean options are always true
         .Int => |int| return if (int.is_signed)
-            try std.fmt.parseInt(T, textInput, 10)
+            try std.fmt.parseInt(T, textInput, 0)
         else
-            try std.fmt.parseUnsigned(T, textInput, 10),
+            try std.fmt.parseUnsigned(T, textInput, 0),
         .Float => return try std.fmt.parseFloat(T, textInput),
         .Enum => {
             if (@hasDecl(T, "parse")) {
