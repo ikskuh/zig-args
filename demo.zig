@@ -11,6 +11,8 @@ pub fn main() !void {
         @"with-hexdump": bool = false,
         @"intermix-source": bool = false,
         numberOfBytes: ?i32 = null,
+        signed_number: ?i64 = null,
+        unsigned_number: ?u64 = null,
         mode: enum { default, special, slow, fast } = .default,
 
         // This declares short-hand options for single hyphen

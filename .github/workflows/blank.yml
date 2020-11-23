@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  schedule:
+    - cron: '0 5 * * *' # run at 5 AM UTC
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v1
+      with:
+        version: master
+    
+    - name: Build demo
+      run: |
+        zig build-exe demo.zig
+
+    - name: Run demo
+      run: ./demo
+      
+  windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v1
+      with:
+        version: master
+    
+    - name: Build demo
+      run: zig build-exe demo.zig
+
+    - name: Run demo
+      run: ./demo.exe
+      
+  macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v1
+      with:
+        version: master
+    
+    - name: Build demo
+      run: zig build-exe demo.zig
+
+    - name: Run demo
+      run: ./demo
