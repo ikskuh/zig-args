@@ -205,10 +205,10 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
             return try parseBoolean(textInput)
         else
             return true, // boolean options are always true
-        .Int => |int| return if (int.is_signed)
-            try std.fmt.parseInt(T, textInput, 10)
-        else
-            try std.fmt.parseUnsigned(T, textInput, 10),
+        .Int => |int| return switch (int.signedness) {
+            .signed => try std.fmt.parseInt(T, textInput, 10),
+            .unsigned => try std.fmt.parseUnsigned(T, textInput, 10),
+        },
         .Float => return try std.fmt.parseFloat(T, textInput),
         .Enum => {
             if (@hasDecl(T, "parse")) {
@@ -258,9 +258,9 @@ fn parseOption(
         };
     } else
         convertArgumentValue(field_type, if (value) |val| val else "") catch |err| {
-        try outputParseError(name, err);
-        return err;
-    }; // argument is "empty"
+            try outputParseError(name, err);
+            return err;
+        }; // argument is "empty"
 }
 
 /// Helper function that will print an error message when a value could not be parsed, then return the same error again
