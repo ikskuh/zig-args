@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: "0 5 * * *" # run at 5 AM UTC
+
+jobs:
+  cross-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: master
+
+      - name: Build demo
+        run: |
+          zig build-exe demo.zig
+
+      - name: Run demo
+        run: ./demo --output demo --with-offset --signed_number=-10 --unsigned_number 20 --mode slow help this is borked

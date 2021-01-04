@@ -86,15 +86,16 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                             if (fld.name.len != 1)
                                 @compileError("All shorthand fields must be exactly one character long!");
                             if (fld.name[0] == char) {
-                                const real_fld = std.meta.fieldInfo(Spec, @field(Spec.shorthands, fld.name));
+                                const real_name = @field(Spec.shorthands, fld.name);
+                                const real_fld_type = @TypeOf(@field(result.options, real_name));
 
                                 // -2 because we stripped of the "-" at the beginning
-                                if (requiresArg(real_fld.field_type) and index != item.len - 2) {
+                                if (requiresArg(real_fld_type) and index != item.len - 2) {
                                     try std.io.getStdErr().writer().writeAll("An option with argument must be the last option for short command line options.\n");
                                     return error.EncounteredUnexpectedArgument;
                                 }
 
-                                try parseOption(Spec, &result, args, real_fld.name, null);
+                                try parseOption(Spec, &result, args, real_name, null);
 
                                 found = true;
                             }
