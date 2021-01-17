@@ -71,7 +71,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
             }
 
             if (!found) {
-                try std.io.getStdErr().writer().print("Unknown command line option: {}\n", .{pair.name});
+                try std.io.getStdErr().writer().print("Unknown command line option: {s}\n", .{pair.name});
                 return error.EncounteredUnknownArgument;
             }
         } else if (std.mem.startsWith(u8, item, "-")) {
@@ -247,7 +247,7 @@ fn parseOption(
         else
             try (args.next(&result.arena.allocator) orelse {
                 try std.io.getStdErr().writer().print(
-                    "Missing argument for {}.\n",
+                    "Missing argument for {s}.\n",
                     .{name},
                 );
                 return error.MissingArgument;
@@ -266,7 +266,7 @@ fn parseOption(
 
 /// Helper function that will print an error message when a value could not be parsed, then return the same error again
 fn outputParseError(option: []const u8, err: anytype) !void {
-    try std.io.getStdErr().writer().print("Failed to parse option {}: {}\n", .{
+    try std.io.getStdErr().writer().print("Failed to parse option {s}: {s}\n", .{
         option,
         @errorName(err),
     });
