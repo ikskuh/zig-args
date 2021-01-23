@@ -197,20 +197,17 @@ fn parseBoolean(str: []const u8) !bool {
 
 /// Parses an int option.
 fn parseInt(comptime T: type, str: []const u8) !T {
-    if (str.len == 0)
-        return error.EmptyString;
-
     var buf = str;
     var multiplier: T = 1;
 
-    {
+    if (buf.len != 0) {
         var base1024 = false;
         if (std.ascii.toLower(buf[buf.len - 1]) == 'i') {   //ki vs k for instance
             buf.len -= 1;
             base1024 = true;
         }
-        if (buf.len != 0)  {
-            var pow: T = switch (buf[buf.len - 1]) {
+        if (buf.len != 0) {
+            var pow: u3 = switch (buf[buf.len - 1]) {
                 'k', 'K' => 1,  //kilo
                 'm', 'M' => 2,  //mega
                 'g', 'G' => 3,  //giga
@@ -225,7 +222,7 @@ fn parseInt(comptime T: type, str: []const u8) !T {
                 if (comptime std.math.maxInt(T) < 1024)
                     return error.Overflow;
                 var base: T = if (base1024) 1024 else 1000;
-                multiplier = try std.math.powi(T, base, pow);
+                multiplier = try std.math.powi(T, base, @intCast(T, pow));
             }
         }
     }
@@ -236,6 +233,18 @@ fn parseInt(comptime T: type, str: []const u8) !T {
     };
 
     return try std.math.mul(T, ret, multiplier);
+}
+
+test "parseInt" {
+    const tst = std.testing;
+
+    tst.expectEqual(@as(i32, 50), try parseInt(i32, "50"));
+    tst.expectEqual(@as(i32, 6000), try parseInt(i32, "6k"));
+    tst.expectEqual(@as(u32, 2048), try parseInt(u32, "0x2KI"));
+    tst.expectEqual(@as(i8, 0), try parseInt(i8, "0"));
+    tst.expectEqual(@as(usize, 10_000_000_000), try parseInt(usize, "0xAg"));
+    tst.expectError(error.Overflow, parseInt(i2, "1m"));
+    tst.expectError(error.Overflow, parseInt(u16, "1Ti"));
 }
 
 /// Converts an argument value to the target type.
