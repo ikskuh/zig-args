@@ -215,10 +215,10 @@ fn parseInt(comptime T: type, str: []const u8) !T {
                 'p', 'P' => 5,  //peta
                 else => 0
             };
-            if (pow != 0)
+            
+            if (pow != 0) {
                 buf.len -= 1;
 
-            if (pow != 0) {
                 if (comptime std.math.maxInt(T) < 1024)
                     return error.Overflow;
                 var base: T = if (base1024) 1024 else 1000;
