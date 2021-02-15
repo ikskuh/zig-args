@@ -29,7 +29,7 @@ pub fn main() !void {
 
     std.debug.print("parsed options:\n", .{});
     inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
-        std.debug.print("\t{s} = {}\n", .{
+        std.debug.print("\t{s} = {any}\n", .{
             fld.name,
             @field(options.options, fld.name),
         });
