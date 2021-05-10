@@ -1,9 +1,21 @@
 const std = @import("std");
 
+const ErrorReporting = enum {
+    print,
+    errors,
+    ignore,
+};
+
+pub const Error = union(ErrorReporting) {
+    print: []const u8,
+    errors: u8,
+    ignore: u8,
+};
+
 /// Parses arguments for the given specification and our current process.
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
+pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator, reporting: Error) !ParseArgsResult(Spec) {
     var args = std.process.args();
 
     const executable_name = try (args.next(allocator) orelse {
@@ -12,7 +24,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
     });
     errdefer allocator.free(executable_name);
 
-    var result = try parse(Spec, &args, allocator);
+    var result = try parse(Spec, &args, allocator, reporting);
 
     result.executable_name = executable_name;
 
@@ -25,7 +37,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
 /// - `allocator` is the allocator that is used to allocate all required memory
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
+pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *std.mem.Allocator, reporting: Error) !ParseArgsResult(Spec) {
     var result = ParseArgsResult(Spec){
         .arena = std.heap.ArenaAllocator.init(allocator),
         .options = Spec{},
@@ -71,6 +83,9 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
             }
 
             if (!found) {
+                if (reporting.print.len == 0) {
+                    try std.io.getStdErr().writer().print("<Custom message>: {s}\n", .{pair.name});
+                }
                 try std.io.getStdErr().writer().print("Unknown command line option: {s}\n", .{pair.name});
                 return error.EncounteredUnknownArgument;
             }
@@ -101,6 +116,10 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                             }
                         }
                         if (!found) {
+                            
+                            if (reporting.print.len == 0) {
+                                try std.io.getStdErr().writer().print("<Custom message>: -{c}\n", .{char});
+                            }
                             try std.io.getStdErr().writer().print("Unknown command line option: -{c}\n", .{char});
                             return error.EncounteredUnknownArgument;
                         }
