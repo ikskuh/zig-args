@@ -3,16 +3,22 @@ const std = @import("std");
 /// Parses arguments for the given specification and our current process.
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
+/// - `error_handling` defines how parser errors will be handled.
+pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec) {
     var args = std.process.args();
 
     const executable_name = try (args.next(allocator) orelse {
-        try std.io.getStdErr().writer().writeAll("Failed to get executable name from the argument list!\n");
+        try error_handling.process(error.NoExecutableName, Error{
+            .option = "",
+            .kind = .missing_executable_name,
+        });
+
+        // we do not assume any more arguments appear here anyways...
         return error.NoExecutableName;
     });
     errdefer allocator.free(executable_name);
 
-    var result = try parse(Spec, &args, allocator);
+    var result = try parse(Spec, &args, allocator, error_handling);
 
     result.executable_name = executable_name;
 
@@ -23,9 +29,10 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
 /// - `Spec` is the configuration of the arguments.
 /// - `args` is an ArgIterator that will yield the command line arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
+/// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *std.mem.Allocator) !ParseArgsResult(Spec) {
+pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec) {
     var result = ParseArgsResult(Spec){
         .arena = std.heap.ArenaAllocator.init(allocator),
         .options = Spec{},
@@ -36,6 +43,8 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
 
     var arglist = std.ArrayList([]const u8).init(allocator);
     errdefer arglist.deinit();
+
+    var last_error: ?anyerror = null;
 
     while (args.next(&result.arena.allocator)) |item_or_error| {
         const item = try item_or_error;
@@ -65,14 +74,17 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
             var found = false;
             inline for (std.meta.fields(Spec)) |fld| {
                 if (std.mem.eql(u8, pair.name, fld.name)) {
-                    try parseOption(Spec, &result, args, fld.name, pair.value);
+                    try parseOption(Spec, &result, args, error_handling, &last_error, fld.name, pair.value);
                     found = true;
                 }
             }
 
             if (!found) {
-                try std.io.getStdErr().writer().print("Unknown command line option: {s}\n", .{pair.name});
-                return error.EncounteredUnknownArgument;
+                last_error = error.EncounteredUnknownArgument;
+                try error_handling.process(error.EncounteredUnknownArgument, Error{
+                    .option = pair.name,
+                    .kind = .unknown,
+                });
             }
         } else if (std.mem.startsWith(u8, item, "-")) {
             if (std.mem.eql(u8, item, "-")) {
@@ -81,6 +93,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
             } else {
                 if (@hasDecl(Spec, "shorthands")) {
                     for (item[1..]) |char, index| {
+                        var option_name = [2]u8{ '-', char };
                         var found = false;
                         inline for (std.meta.fields(@TypeOf(Spec.shorthands))) |fld| {
                             if (fld.name.len != 1)
@@ -91,29 +104,40 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
 
                                 // -2 because we stripped of the "-" at the beginning
                                 if (requiresArg(real_fld_type) and index != item.len - 2) {
-                                    try std.io.getStdErr().writer().writeAll("An option with argument must be the last option for short command line options.\n");
-                                    return error.EncounteredUnexpectedArgument;
+                                    last_error = error.EncounteredUnexpectedArgument;
+                                    try error_handling.process(error.EncounteredUnexpectedArgument, Error{
+                                        .option = &option_name,
+                                        .kind = .invalid_placement,
+                                    });
+                                } else {
+                                    try parseOption(Spec, &result, args, error_handling, &last_error, real_name, null);
                                 }
-
-                                try parseOption(Spec, &result, args, real_name, null);
 
                                 found = true;
                             }
                         }
                         if (!found) {
-                            try std.io.getStdErr().writer().print("Unknown command line option: -{c}\n", .{char});
-                            return error.EncounteredUnknownArgument;
+                            last_error = error.EncounteredUnknownArgument;
+                            try error_handling.process(error.EncounteredUnknownArgument, Error{
+                                .option = &option_name,
+                                .kind = .unknown,
+                            });
                         }
                     }
                 } else {
-                    try std.io.getStdErr().writer().writeAll("Short command line options are not supported.\n");
-                    return error.EncounteredUnsupportedArgument;
+                    try error_handling.process(error.EncounteredUnsupportedArgument, Error{
+                        .option = item,
+                        .kind = .unsupported,
+                    });
                 }
             }
         } else {
             try arglist.append(item);
         }
     }
+
+    if (last_error != null)
+        return error.InvalidArguments;
 
     // This will consume the rest of the arguments as positional ones.
     // Only executes when the above loop is broken.
@@ -202,20 +226,20 @@ fn parseInt(comptime T: type, str: []const u8) !T {
 
     if (buf.len != 0) {
         var base1024 = false;
-        if (std.ascii.toLower(buf[buf.len - 1]) == 'i') {   //ki vs k for instance
+        if (std.ascii.toLower(buf[buf.len - 1]) == 'i') { //ki vs k for instance
             buf.len -= 1;
             base1024 = true;
         }
         if (buf.len != 0) {
             var pow: u3 = switch (buf[buf.len - 1]) {
-                'k', 'K' => 1,  //kilo
-                'm', 'M' => 2,  //mega
-                'g', 'G' => 3,  //giga
-                't', 'T' => 4,  //tera
-                'p', 'P' => 5,  //peta
-                else => 0
+                'k', 'K' => 1, //kilo
+                'm', 'M' => 2, //mega
+                'g', 'G' => 3, //giga
+                't', 'T' => 4, //tera
+                'p', 'P' => 5, //peta
+                else => 0,
             };
-            
+
             if (pow != 0) {
                 buf.len -= 1;
 
@@ -283,6 +307,8 @@ fn parseOption(
     comptime Spec: type,
     result: *ParseArgsResult(Spec),
     args: *std.process.ArgIterator,
+    error_handling: ErrorHandling,
+    last_error: *?anyerror,
     /// The name of the option that is currently parsed.
     comptime name: []const u8,
     /// Optional pre-defined value for options that use `--foo=bar`
@@ -290,34 +316,168 @@ fn parseOption(
 ) !void {
     const field_type = @TypeOf(@field(result.options, name));
 
-    @field(result.options, name) = if (requiresArg(field_type)) blk: {
-        const argval = if (value) |val|
-            val
-        else
-            try (args.next(&result.arena.allocator) orelse {
-                try std.io.getStdErr().writer().print(
-                    "Missing argument for {s}.\n",
-                    .{name},
-                );
-                return error.MissingArgument;
+    const final_value = if (value) |val|
+        val // use the literal value
+    else if (requiresArg(field_type))
+        // fetch from parser
+        try (args.next(&result.arena.allocator) orelse {
+            last_error.* = error.MissingArgument;
+            try error_handling.process(error.MissingArgument, Error{
+                .option = "--" ++ name,
+                .kind = .missing_argument,
             });
+            return;
+        })
+    else
+        // argument is "empty"
+        "";
 
-        break :blk convertArgumentValue(field_type, argval) catch |err| {
-            try outputParseError(name, err);
-            return err;
-        };
-    } else
-        convertArgumentValue(field_type, if (value) |val| val else "") catch |err| {
-            try outputParseError(name, err);
-            return err;
-        }; // argument is "empty"
+    @field(result.options, name) = convertArgumentValue(field_type, final_value) catch |err| {
+        last_error.* = err;
+        try error_handling.process(err, Error{
+            .option = "--" ++ name,
+            .kind = .{ .invalid_value = final_value },
+        });
+        // we couldn't parse the value, so we return a undefined value as we have signalled an
+        // error and won't return this anyways.
+        return undefined;
+    };
 }
 
-/// Helper function that will print an error message when a value could not be parsed, then return the same error again
-fn outputParseError(option: []const u8, err: anytype) !void {
-    try std.io.getStdErr().writer().print("Failed to parse option {s}: {s}\n", .{
-        option,
-        @errorName(err),
+/// A collection of errors that were encountered while parsing arguments.
+pub const ErrorCollection = struct {
+    const Self = @This();
+
+    arena: std.heap.ArenaAllocator,
+    list: std.ArrayList(Error),
+
+    pub fn init(allocator: *std.mem.Allocator) Self {
+        return Self{
+            .arena = std.heap.ArenaAllocator.init(allocator),
+            .list = std.ArrayList(Error).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.list.deinit();
+        self.arena.deinit();
+        self.* = undefined;
+    }
+
+    /// Returns the current enumeration of errors.
+    pub fn errors(self: Self) []const Error {
+        return self.list.items;
+    }
+
+    /// Appends an error to the collection
+    fn insert(self: *Self, err: Error) !void {
+        var dupe = Error{
+            .option = try self.arena.allocator.dupe(u8, err.option),
+            .kind = switch (err.kind) {
+                .invalid_value => |v| Error.Kind{
+                    .invalid_value = try self.arena.allocator.dupe(u8, v),
+                },
+                // flat copy
+                .unknown, .out_of_memory, .unsupported, .invalid_placement, .missing_argument, .missing_executable_name => err.kind,
+            },
+        };
+        try self.list.append(dupe);
+    }
+};
+
+/// An argument parsing error.
+pub const Error = struct {
+    const Self = @This();
+
+    /// The option that yielded the error
+    option: []const u8,
+
+    /// The kind of error, might include additional information
+    kind: Kind,
+
+    pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        switch (self.kind) {
+            .unknown => try writer.print("The option {s} does not exist", .{self.option}),
+            .invalid_value => |value| try writer.print("Invalid value '{s}' for option {s}", .{ value, self.option }),
+            .out_of_memory => try writer.print("Out of memory while parsing option {s}", .{self.option}),
+            .unsupported => try writer.writeAll("Short command line options are not supported."),
+            .invalid_placement => try writer.writeAll("An option with argument must be the last option for short command line options."),
+            .missing_argument => try writer.print("Missing argument for option {s}", .{self.option}),
+
+            .missing_executable_name => try writer.writeAll("Failed to get executable name from the argument list!"),
+        }
+    }
+
+    const Kind = union(enum) {
+        /// When the argument itself is unknown
+        unknown,
+
+        /// When the parsing of an argument value failed
+        invalid_value: []const u8,
+
+        /// When the parsing of an argument value triggered a out of memory error
+        out_of_memory,
+
+        /// When the argument is a short argument and no shorthands are enabled
+        unsupported,
+
+        /// Can only happen when a shorthand for an option requires an argument, but is followed by more shorthands.
+        invalid_placement,
+
+        /// An option was passed that requires an argument, but the option was passed last.
+        missing_argument,
+
+        /// This error has an empty option name and can only happen when parsing the argument list for a process.
+        missing_executable_name,
+    };
+};
+
+/// The error handling method that should be used.
+pub const ErrorHandling = union(enum) {
+    const Self = @This();
+
+    /// Do not print or process any errors, just 
+    /// return a fitting error on the first argument mismatch.
+    silent,
+
+    /// Print errors to stderr and return a `error.InvalidArguments`.
+    print,
+
+    /// Collect errors into the error collection and return
+    /// `error.InvalidArguments` when any error was encountered.
+    collect: *ErrorCollection,
+
+    /// Processes an error with the given handling method.
+    fn process(self: Self, src_error: anytype, err: Error) !void {
+        if (@typeInfo(@TypeOf(src_error)) != .ErrorSet)
+            @compileError("src_error must be a error union!");
+        switch (self) {
+            .silent => return src_error,
+            .print => try std.io.getStdErr().writer().print("{}\n", .{err}),
+            .collect => |collection| try collection.insert(err),
+        }
+    }
+};
+
+test {
+    std.testing.refAllDecls(@This());
+}
+
+test "ErrorCollection" {
+    var option_buf = "option".*;
+    var invalid_buf = "invalid".*;
+
+    var ec = ErrorCollection.init(std.testing.allocator);
+    defer ec.deinit();
+
+    try ec.insert(Error{
+        .option = &option_buf,
+        .kind = .{ .invalid_value = &invalid_buf },
     });
-    return err;
+
+    option_buf = undefined;
+    invalid_buf = undefined;
+
+    std.testing.expectEqualStrings("option", ec.errors()[0].option);
+    std.testing.expectEqualStrings("invalid", ec.errors()[0].kind.invalid_value);
 }

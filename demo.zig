@@ -1,10 +1,10 @@
 const std = @import("std");
 const argsParser = @import("args.zig");
 
-pub fn main() !void {
+pub fn main() !u8 {
     var argsAllocator = std.heap.page_allocator;
 
-    const options = try argsParser.parseForCurrentProcess(struct {
+    const options = argsParser.parseForCurrentProcess(struct {
         // This declares long options for double hyphen
         output: ?[]const u8 = null,
         @"with-offset": bool = false,
@@ -22,7 +22,7 @@ pub fn main() !void {
             .O = "with-offset",
             .o = "output",
         };
-    }, argsAllocator);
+    }, argsAllocator, .print) catch return 1;
     defer options.deinit();
 
     std.debug.print("executable name: {s}\n", .{options.executable_name});
@@ -39,4 +39,6 @@ pub fn main() !void {
     for (options.positionals) |arg| {
         std.debug.print("\t'{s}'\n", .{arg});
     }
+
+    return 0;
 }
