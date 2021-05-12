@@ -18,7 +18,7 @@ Simple-to-use argument parser with struct-based config
 ## Example
 
 ```zig
-const options = try argsParser.parse(struct {
+const options = argsParser.parse(struct {
     // This declares long options for double hyphen
     output: ?[]const u8 = null,
     @"with-offset": bool = false,
@@ -33,7 +33,7 @@ const options = try argsParser.parse(struct {
         .O = "with-offset",
         .o = "output",
     };
-}, &args, argsAllocator);
+}, &args, argsAllocator, print) catch return 1;
 defer options.deinit();
 
 std.debug.warn("parsed result:\n{}\npositionals:\n", .{options.options});
