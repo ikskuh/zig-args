@@ -262,13 +262,13 @@ fn parseInt(comptime T: type, str: []const u8) !T {
 test "parseInt" {
     const tst = std.testing;
 
-    tst.expectEqual(@as(i32, 50), try parseInt(i32, "50"));
-    tst.expectEqual(@as(i32, 6000), try parseInt(i32, "6k"));
-    tst.expectEqual(@as(u32, 2048), try parseInt(u32, "0x2KI"));
-    tst.expectEqual(@as(i8, 0), try parseInt(i8, "0"));
-    tst.expectEqual(@as(usize, 10_000_000_000), try parseInt(usize, "0xAg"));
-    tst.expectError(error.Overflow, parseInt(i2, "1m"));
-    tst.expectError(error.Overflow, parseInt(u16, "1Ti"));
+    try tst.expectEqual(@as(i32, 50), try parseInt(i32, "50"));
+    try tst.expectEqual(@as(i32, 6000), try parseInt(i32, "6k"));
+    try tst.expectEqual(@as(u32, 2048), try parseInt(u32, "0x2KI"));
+    try tst.expectEqual(@as(i8, 0), try parseInt(i8, "0"));
+    try tst.expectEqual(@as(usize, 10_000_000_000), try parseInt(usize, "0xAg"));
+    try tst.expectError(error.Overflow, parseInt(i2, "1m"));
+    try tst.expectError(error.Overflow, parseInt(u16, "1Ti"));
 }
 
 /// Converts an argument value to the target type.
@@ -282,7 +282,7 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
             return try parseBoolean(textInput)
         else
             return true, // boolean options are always true
-        .Int => |int| return try parseInt(T, textInput),
+        .Int => return try parseInt(T, textInput),
         .Float => return try std.fmt.parseFloat(T, textInput),
         .Enum => {
             if (@hasDecl(T, "parse")) {
@@ -396,6 +396,8 @@ pub const Error = struct {
     kind: Kind,
 
     pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
         switch (self.kind) {
             .unknown => try writer.print("The option {s} does not exist", .{self.option}),
             .invalid_value => |value| try writer.print("Invalid value '{s}' for option {s}", .{ value, self.option }),
@@ -478,6 +480,6 @@ test "ErrorCollection" {
     option_buf = undefined;
     invalid_buf = undefined;
 
-    std.testing.expectEqualStrings("option", ec.errors()[0].option);
-    std.testing.expectEqualStrings("invalid", ec.errors()[0].kind.invalid_value);
+    try std.testing.expectEqualStrings("option", ec.errors()[0].option);
+    try std.testing.expectEqualStrings("invalid", ec.errors()[0].kind.invalid_value);
 }
