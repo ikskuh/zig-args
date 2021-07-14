@@ -155,6 +155,9 @@ pub fn ParseArgsResult(comptime Spec: type) type {
     return struct {
         const Self = @This();
 
+        /// Exports the type of options.
+        pub const Options = Spec;
+
         arena: std.heap.ArenaAllocator,
 
         /// The options with either default or set values.
