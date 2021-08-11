@@ -41,7 +41,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
     };
     errdefer result.arena.deinit();
 
-    var arglist = std.ArrayList([]const u8).init(allocator);
+    var arglist = std.ArrayList([:0]const u8).init(allocator);
     errdefer arglist.deinit();
 
     var last_error: ?anyerror = null;
@@ -164,10 +164,10 @@ pub fn ParseArgsResult(comptime Spec: type) type {
         options: Spec,
 
         /// The positional arguments that were passed to the process.
-        positionals: [][]const u8,
+        positionals: [][:0]const u8,
 
         /// Name of the executable file (or: zeroth argument)
-        executable_name: ?[]const u8,
+        executable_name: ?[:0]const u8,
 
         pub fn deinit(self: Self) void {
             self.arena.child_allocator.free(self.positionals);
