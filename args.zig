@@ -18,7 +18,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
     });
     errdefer allocator.free(executable_name);
 
-    var result = try parse(Spec, &args, allocator, error_handling);
+    var result = try parseInternal(Spec, null, &args, allocator, error_handling);
 
     result.executable_name = executable_name;
 
@@ -43,7 +43,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
     });
     errdefer allocator.free(executable_name);
 
-    var result = try parse(Spec, Verb, &args, allocator, error_handling);
+    var result = try parseInternal(Spec, Verb, &args, allocator, error_handling);
 
     result.executable_name = executable_name;
 
