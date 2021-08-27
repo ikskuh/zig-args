@@ -597,3 +597,113 @@ test "ErrorCollection" {
     try std.testing.expectEqualStrings("option", ec.errors()[0].option);
     try std.testing.expectEqualStrings("invalid", ec.errors()[0].kind.invalid_value);
 }
+
+const TestIterator = struct {
+    sequence: []const [:0]const u8,
+    index: usize = 0,
+
+    pub fn init(items: []const [:0]const u8) TestIterator {
+        return TestIterator{ .sequence = items };
+    }
+
+    pub fn next(self: *@This(), allocator: *std.mem.Allocator) ?(error{OutOfMemory}![:0]u8) {
+        if (self.index >= self.sequence.len)
+            return null;
+        const result = try allocator.dupeZ(u8, self.sequence[self.index]);
+        self.index += 1;
+        return result;
+    }
+};
+
+const TestEnum = enum { default, special, slow, fast };
+
+const TestGenericOptions = struct {
+    output: ?[]const u8 = null,
+    @"with-offset": bool = false,
+    @"with-hexdump": bool = false,
+    @"intermix-source": bool = false,
+    numberOfBytes: ?i32 = null,
+    signed_number: ?i64 = null,
+    unsigned_number: ?u64 = null,
+    mode: TestEnum = .default,
+
+    // This declares short-hand options for single hyphen
+    pub const shorthands = .{
+        .S = "intermix-source",
+        .b = "with-hexdump",
+        .O = "with-offset",
+        .o = "output",
+    };
+};
+
+test "basic parsing (no verbs)" {
+    var titerator = TestIterator.init(&[_][:0]const u8{
+        "--output",
+        "foobar",
+        "--with-offset",
+        "--numberOfBytes",
+        "-250",
+        "--unsigned_number",
+        "0xFF00FF",
+        "positional 1",
+        "--mode",
+        "special",
+        "positional 2",
+    });
+    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .silent);
+    defer args.deinit();
+
+    try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
+    try std.testing.expect(void == @TypeOf(args.verb));
+    try std.testing.expectEqual(@as(usize, 2), args.positionals.len);
+    try std.testing.expectEqualStrings("positional 1", args.positionals[0]);
+    try std.testing.expectEqualStrings("positional 2", args.positionals[1]);
+
+    try std.testing.expectEqualStrings("foobar", args.options.output.?);
+
+    try std.testing.expectEqual(@as(?i32, -250), args.options.numberOfBytes);
+    try std.testing.expectEqual(@as(?u64, 0xFF00FF), args.options.unsigned_number);
+    try std.testing.expectEqual(TestEnum.special, args.options.mode);
+
+    try std.testing.expectEqual(@as(?i64, null), args.options.signed_number);
+
+    try std.testing.expectEqual(true, args.options.@"with-offset");
+    try std.testing.expectEqual(false, args.options.@"with-hexdump");
+    try std.testing.expectEqual(false, args.options.@"intermix-source");
+}
+
+test "shorthand parsing (no verbs)" {
+    var titerator = TestIterator.init(&[_][:0]const u8{
+        "-o",
+        "foobar",
+        "-O",
+        "--numberOfBytes",
+        "-250",
+        "--unsigned_number",
+        "0xFF00FF",
+        "positional 1",
+        "--mode",
+        "special",
+        "positional 2",
+    });
+    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .silent);
+    defer args.deinit();
+
+    try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
+    try std.testing.expect(void == @TypeOf(args.verb));
+    try std.testing.expectEqual(@as(usize, 2), args.positionals.len);
+    try std.testing.expectEqualStrings("positional 1", args.positionals[0]);
+    try std.testing.expectEqualStrings("positional 2", args.positionals[1]);
+
+    try std.testing.expectEqualStrings("foobar", args.options.output.?);
+
+    try std.testing.expectEqual(@as(?i32, -250), args.options.numberOfBytes);
+    try std.testing.expectEqual(@as(?u64, 0xFF00FF), args.options.unsigned_number);
+    try std.testing.expectEqual(TestEnum.special, args.options.mode);
+
+    try std.testing.expectEqual(@as(?i64, null), args.options.signed_number);
+
+    try std.testing.expectEqual(true, args.options.@"with-offset");
+    try std.testing.expectEqual(false, args.options.@"with-hexdump");
+    try std.testing.expectEqual(false, args.options.@"intermix-source");
+}
