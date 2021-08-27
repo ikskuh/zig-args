@@ -24,9 +24,7 @@ jobs:
         with:
           version: master
 
-      - name: Build demo
+      - name: Run the test suite
         run: |
-          zig build-exe demo.zig
+          zig build test
 
-      - name: Run demo
-        run: ./demo --output demo --with-offset --signed_number=-10 --unsigned_number 20 --mode slow help this is borked

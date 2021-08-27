@@ -4,7 +4,7 @@ const std = @import("std");
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec) {
+pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
     var args = std.process.args();
 
     const executable_name = try (args.next(allocator) orelse {
@@ -25,17 +25,62 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
     return result;
 }
 
-/// Parses arguments for the given specification.
+/// Parses arguments for the given specification and our current process.
 /// - `Spec` is the configuration of the arguments.
-/// - `args` is an ArgIterator that will yield the command line arguments.
+/// - `allocator` is the allocator that is used to allocate all required memory
+/// - `error_handling` defines how parser errors will be handled.
+pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
+    var args = std.process.args();
+
+    const executable_name = try (args.next(allocator) orelse {
+        try error_handling.process(error.NoExecutableName, Error{
+            .option = "",
+            .kind = .missing_executable_name,
+        });
+
+        // we do not assume any more arguments appear here anyways...
+        return error.NoExecutableName;
+    });
+    errdefer allocator.free(executable_name);
+
+    var result = try parse(Spec, Verb, &args, allocator, error_handling);
+
+    result.executable_name = executable_name;
+
+    return result;
+}
+
+/// Parses arguments for the given specification.
+/// - `Generic` is the configuration of the arguments.
+/// - `args_iterator` is a pointer to an std.process.ArgIterator that will yield the command line arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec) {
-    var result = ParseArgsResult(Spec){
+pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, null) {
+    return parseInternal(Generic, null, args_iterator, allocator, error_handling);
+}
+
+/// Parses arguments for the given specification using a `Verb` method.
+/// This means that the first positional argument is interpreted as a verb, that can
+/// be considered a sub-command that provides more specific options.
+/// - `Generic` is the configuration of the arguments.
+/// - `Verb` is the configuration of the verbs.
+/// - `args_iterator` is a pointer to an std.process.ArgIterator that will yield the command line arguments.
+/// - `allocator` is the allocator that is used to allocate all required memory
+/// - `error_handling` defines how parser errors will be handled.
+///
+/// Note that `.executable_name` in the result will not be set!
+pub fn parseWithVerb(comptime Generic: type, comptime Verb: type, args_iterator: anytype, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, Verb) {
+    return parseInternal(Generic, Verb, args_iterator, allocator, error_handling);
+}
+
+/// Same as parse, but with anytype argument for testability
+fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterator: anytype, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, MaybeVerb) {
+    var result = ParseArgsResult(Generic, MaybeVerb){
         .arena = std.heap.ArenaAllocator.init(allocator),
-        .options = Spec{},
+        .options = Generic{},
+        .verb = if (MaybeVerb != null) null else {}, // no verb by default
         .positionals = undefined,
         .executable_name = null,
     };
@@ -46,7 +91,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
 
     var last_error: ?anyerror = null;
 
-    while (args.next(&result.arena.allocator)) |item_or_error| {
+    while (args_iterator.next(&result.arena.allocator)) |item_or_error| {
         const item = try item_or_error;
 
         if (std.mem.startsWith(u8, item, "--")) {
@@ -72,10 +117,37 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                 };
 
             var found = false;
-            inline for (std.meta.fields(Spec)) |fld| {
+            inline for (std.meta.fields(Generic)) |fld| {
                 if (std.mem.eql(u8, pair.name, fld.name)) {
-                    try parseOption(Spec, &result, args, error_handling, &last_error, fld.name, pair.value);
+                    try parseOption(Generic, &result.arena.allocator, &result.options, args_iterator, error_handling, &last_error, fld.name, pair.value);
                     found = true;
+                }
+            }
+
+            if (MaybeVerb) |Verb| {
+                if (result.verb) |*verb| {
+                    if (!found) {
+                        const Tag = std.meta.Tag(Verb);
+                        inline for (std.meta.fields(Verb)) |verb_info| {
+                            if (verb.* == @field(Tag, verb_info.name)) {
+                                inline for (std.meta.fields(Verb)) |fld| {
+                                    if (std.mem.eql(u8, pair.name, fld.name)) {
+                                        try parseOption(
+                                            Verb,
+                                            &result.arena.allocator,
+                                            &@field(verb.*, fld.name),
+                                            args_iterator,
+                                            error_handling,
+                                            &last_error,
+                                            fld.name,
+                                            pair.value,
+                                        );
+                                        found = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -91,15 +163,15 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                 // single hyphen is considered a positional argument
                 try arglist.append(item);
             } else {
-                if (@hasDecl(Spec, "shorthands")) {
+                if (@hasDecl(Generic, "shorthands")) {
                     for (item[1..]) |char, index| {
                         var option_name = [2]u8{ '-', char };
                         var found = false;
-                        inline for (std.meta.fields(@TypeOf(Spec.shorthands))) |fld| {
+                        inline for (std.meta.fields(@TypeOf(Generic.shorthands))) |fld| {
                             if (fld.name.len != 1)
                                 @compileError("All shorthand fields must be exactly one character long!");
                             if (fld.name[0] == char) {
-                                const real_name = @field(Spec.shorthands, fld.name);
+                                const real_name = @field(Generic.shorthands, fld.name);
                                 const real_fld_type = @TypeOf(@field(result.options, real_name));
 
                                 // -2 because we stripped of the "-" at the beginning
@@ -110,7 +182,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                                         .kind = .invalid_placement,
                                     });
                                 } else {
-                                    try parseOption(Spec, &result, args, error_handling, &last_error, real_name, null);
+                                    try parseOption(Generic, &result.arena.allocator, &result.options, args_iterator, error_handling, &last_error, real_name, null);
                                 }
 
                                 found = true;
@@ -132,6 +204,26 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
                 }
             }
         } else {
+            if (MaybeVerb) |Verb| {
+                if (arglist.items.len == 0) {
+                    inline for (std.meta.fields(Verb)) |fld| {
+                        if (std.mem.eql(u8, item, fld.name)) {
+                            // found active verb, default-initialize it
+                            result.verb = @unionInit(Verb, fld.name, fld.field_type{});
+                        }
+                    }
+
+                    if (result.verb == null) {
+                        try error_handling.process(error.EncounteredUnknownVerb, Error{
+                            .option = "verb",
+                            .kind = .unsupported,
+                        });
+                    }
+
+                    continue;
+                }
+            }
+
             try arglist.append(item);
         }
     }
@@ -141,7 +233,7 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
 
     // This will consume the rest of the arguments as positional ones.
     // Only executes when the above loop is broken.
-    while (args.next(&result.arena.allocator)) |item_or_error| {
+    while (args_iterator.next(&result.arena.allocator)) |item_or_error| {
         const item = try item_or_error;
         try arglist.append(item);
     }
@@ -151,17 +243,31 @@ pub fn parse(comptime Spec: type, args: *std.process.ArgIterator, allocator: *st
 }
 
 /// The return type of the argument parser.
-pub fn ParseArgsResult(comptime Spec: type) type {
+pub fn ParseArgsResult(comptime Generic: type, comptime MaybeVerb: ?type) type {
+    if (@typeInfo(Generic) != .Struct)
+        @compileError("Generic argument definition must be a struct");
+
+    if (MaybeVerb) |Verb| {
+        const ti: std.builtin.TypeInfo = @typeInfo(Verb);
+        if (ti != .Union or ti.Union.tag_type == null)
+            @compileError("Verb must be a tagged union");
+    }
+
     return struct {
         const Self = @This();
 
         /// Exports the type of options.
-        pub const Options = Spec;
+        pub const GenericOptions = Generic;
+        pub const Verbs = Verb;
 
         arena: std.heap.ArenaAllocator,
 
         /// The options with either default or set values.
-        options: Spec,
+        options: Generic,
+
+        /// The verb that was parsed or `null` if no first positional was provided.
+        /// Is `void` when verb parsing is disabled
+        verb: if (MaybeVerb) |Verb| ?Verb else void,
 
         /// The positional arguments that were passed to the process.
         positionals: [][:0]const u8,
@@ -308,8 +414,9 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
 /// Parses an option value into the correct type.
 fn parseOption(
     comptime Spec: type,
-    result: *ParseArgsResult(Spec),
-    args: *std.process.ArgIterator,
+    arena: *std.mem.Allocator,
+    target_struct: *Spec,
+    args: anytype,
     error_handling: ErrorHandling,
     last_error: *?anyerror,
     /// The name of the option that is currently parsed.
@@ -317,13 +424,13 @@ fn parseOption(
     /// Optional pre-defined value for options that use `--foo=bar`
     value: ?[]const u8,
 ) !void {
-    const field_type = @TypeOf(@field(result.options, name));
+    const field_type = @TypeOf(@field(target_struct, name));
 
     const final_value = if (value) |val|
         val // use the literal value
     else if (requiresArg(field_type))
         // fetch from parser
-        try (args.next(&result.arena.allocator) orelse {
+        try (args.next(arena) orelse {
             last_error.* = error.MissingArgument;
             try error_handling.process(error.MissingArgument, Error{
                 .option = "--" ++ name,
@@ -335,7 +442,7 @@ fn parseOption(
         // argument is "empty"
         "";
 
-    @field(result.options, name) = convertArgumentValue(field_type, final_value) catch |err| {
+    @field(target_struct, name) = convertArgumentValue(field_type, final_value) catch |err| {
         last_error.* = err;
         try error_handling.process(err, Error{
             .option = "--" ++ name,
@@ -381,7 +488,7 @@ pub const ErrorCollection = struct {
                     .invalid_value = try self.arena.allocator.dupe(u8, v),
                 },
                 // flat copy
-                .unknown, .out_of_memory, .unsupported, .invalid_placement, .missing_argument, .missing_executable_name => err.kind,
+                .unknown, .out_of_memory, .unsupported, .invalid_placement, .missing_argument, .missing_executable_name, .unknown_verb => err.kind,
             },
         };
         try self.list.append(dupe);
@@ -410,6 +517,7 @@ pub const Error = struct {
             .missing_argument => try writer.print("Missing argument for option {s}", .{self.option}),
 
             .missing_executable_name => try writer.writeAll("Failed to get executable name from the argument list!"),
+            .unknown_verb => try writer.print("Unknown verb '{s}'.", .{self.option}),
         }
     }
 
@@ -434,6 +542,9 @@ pub const Error = struct {
 
         /// This error has an empty option name and can only happen when parsing the argument list for a process.
         missing_executable_name,
+
+        /// This error has the verb as an option name and will happen when a verb is provided that is not known.
+        unknown_verb,
     };
 };
 
