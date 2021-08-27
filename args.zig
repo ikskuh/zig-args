@@ -163,10 +163,12 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                 // single hyphen is considered a positional argument
                 try arglist.append(item);
             } else {
-                if (@hasDecl(Generic, "shorthands")) {
-                    for (item[1..]) |char, index| {
-                        var option_name = [2]u8{ '-', char };
-                        var found = false;
+                var any_shorthands = false;
+                for (item[1..]) |char, index| {
+                    var option_name = [2]u8{ '-', char };
+                    var found = false;
+                    if (@hasDecl(Generic, "shorthands")) {
+                        any_shorthands = true;
                         inline for (std.meta.fields(@TypeOf(Generic.shorthands))) |fld| {
                             if (fld.name.len != 1)
                                 @compileError("All shorthand fields must be exactly one character long!");
@@ -188,15 +190,54 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                                 found = true;
                             }
                         }
-                        if (!found) {
-                            last_error = error.EncounteredUnknownArgument;
-                            try error_handling.process(error.EncounteredUnknownArgument, Error{
-                                .option = &option_name,
-                                .kind = .unknown,
-                            });
+                    }
+
+                    if (MaybeVerb) |Verb| {
+                        if (result.verb) |*verb| {
+                            if (!found) {
+                                const Tag = std.meta.Tag(Verb);
+                                inline for (std.meta.fields(Verb)) |verb_info| {
+                                    const VerbType = verb_info.field_type;
+                                    if (verb.* == @field(Tag, verb_info.name)) {
+                                        const target_value = &@field(verb.*, verb_info.name);
+                                        if (@hasDecl(VerbType, "shorthands")) {
+                                            any_shorthands = true;
+                                            inline for (std.meta.fields(@TypeOf(VerbType.shorthands))) |fld| {
+                                                if (fld.name.len != 1)
+                                                    @compileError("All shorthand fields must be exactly one character long!");
+                                                if (fld.name[0] == char) {
+                                                    const real_name = @field(VerbType.shorthands, fld.name);
+                                                    const real_fld_type = @TypeOf(@field(target_value.*, real_name));
+
+                                                    // -2 because we stripped of the "-" at the beginning
+                                                    if (requiresArg(real_fld_type) and index != item.len - 2) {
+                                                        last_error = error.EncounteredUnexpectedArgument;
+                                                        try error_handling.process(error.EncounteredUnexpectedArgument, Error{
+                                                            .option = &option_name,
+                                                            .kind = .invalid_placement,
+                                                        });
+                                                    } else {
+                                                        try parseOption(VerbType, &result.arena.allocator, target_value, args_iterator, error_handling, &last_error, real_name, null);
+                                                    }
+                                                    last_error = null; // we need to reset that error here, as it was set previously
+                                                    found = true;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                } else {
+                    if (!found) {
+                        last_error = error.EncounteredUnknownArgument;
+                        try error_handling.process(error.EncounteredUnknownArgument, Error{
+                            .option = &option_name,
+                            .kind = .unknown,
+                        });
+                    }
+                }
+                if (!any_shorthands) {
                     try error_handling.process(error.EncounteredUnsupportedArgument, Error{
                         .option = item,
                         .kind = .unsupported,
@@ -641,7 +682,15 @@ const TestVerb = union(enum) {
     booze: BoozeOptions,
 
     const MagicOptions = struct { invoke: bool = false };
-    const BoozeOptions = struct { cocktail: bool = false, longdrink: bool = false };
+    const BoozeOptions = struct {
+        cocktail: bool = false,
+        longdrink: bool = false,
+
+        pub const shorthands = .{
+            .c = "cocktail",
+            .l = "longdrink",
+        };
+    };
 };
 
 test "basic parsing (no verbs)" {
@@ -658,7 +707,7 @@ test "basic parsing (no verbs)" {
         "special",
         "positional 2",
     });
-    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .silent);
+    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .print);
     defer args.deinit();
 
     try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
@@ -694,7 +743,7 @@ test "shorthand parsing (no verbs)" {
         "special",
         "positional 2",
     });
-    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .silent);
+    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .print);
     defer args.deinit();
 
     try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
@@ -732,7 +781,52 @@ test "basic parsing (with verbs)" {
         "positional 2",
         "--cocktail",
     });
-    var args = try parseInternal(TestGenericOptions, TestVerb, &titerator, std.testing.allocator, .silent);
+    var args = try parseInternal(TestGenericOptions, TestVerb, &titerator, std.testing.allocator, .print);
+    defer args.deinit();
+
+    try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
+    try std.testing.expect(?TestVerb == @TypeOf(args.verb));
+    try std.testing.expectEqual(@as(usize, 2), args.positionals.len);
+    try std.testing.expectEqualStrings("positional 1", args.positionals[0]);
+    try std.testing.expectEqualStrings("positional 2", args.positionals[1]);
+
+    try std.testing.expectEqualStrings("foobar", args.options.output.?);
+
+    try std.testing.expectEqual(@as(?i32, -250), args.options.numberOfBytes);
+    try std.testing.expectEqual(@as(?u64, 0xFF00FF), args.options.unsigned_number);
+    try std.testing.expectEqual(TestEnum.special, args.options.mode);
+
+    try std.testing.expectEqual(@as(?i64, null), args.options.signed_number);
+
+    try std.testing.expectEqual(true, args.options.@"with-offset");
+    try std.testing.expectEqual(false, args.options.@"with-hexdump");
+    try std.testing.expectEqual(false, args.options.@"intermix-source");
+
+    try std.testing.expect(args.verb.? == .booze);
+
+    const booze = args.verb.?.booze;
+
+    try std.testing.expectEqual(true, booze.cocktail);
+    try std.testing.expectEqual(false, booze.longdrink);
+}
+
+test "shorthand parsing (with verbs)" {
+    var titerator = TestIterator.init(&[_][:0]const u8{
+        "booze", // verb
+        "-o",
+        "foobar",
+        "-O",
+        "--numberOfBytes",
+        "-250",
+        "--unsigned_number",
+        "0xFF00FF",
+        "positional 1",
+        "--mode",
+        "special",
+        "positional 2",
+        "-c", // --cocktail
+    });
+    var args = try parseInternal(TestGenericOptions, TestVerb, &titerator, std.testing.allocator, .print);
     defer args.deinit();
 
     try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
