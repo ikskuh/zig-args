@@ -130,12 +130,12 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                         const Tag = std.meta.Tag(Verb);
                         inline for (std.meta.fields(Verb)) |verb_info| {
                             if (verb.* == @field(Tag, verb_info.name)) {
-                                inline for (std.meta.fields(Verb)) |fld| {
+                                inline for (std.meta.fields(verb_info.field_type)) |fld| {
                                     if (std.mem.eql(u8, pair.name, fld.name)) {
                                         try parseOption(
-                                            Verb,
+                                            verb_info.field_type,
                                             &result.arena.allocator,
-                                            &@field(verb.*, fld.name),
+                                            &@field(verb.*, verb_info.name),
                                             args_iterator,
                                             error_handling,
                                             &last_error,
@@ -205,7 +205,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
             }
         } else {
             if (MaybeVerb) |Verb| {
-                if (arglist.items.len == 0) {
+                if (result.verb == null) {
                     inline for (std.meta.fields(Verb)) |fld| {
                         if (std.mem.eql(u8, item, fld.name)) {
                             // found active verb, default-initialize it
@@ -636,6 +636,14 @@ const TestGenericOptions = struct {
     };
 };
 
+const TestVerb = union(enum) {
+    magic: MagicOptions,
+    booze: BoozeOptions,
+
+    const MagicOptions = struct { invoke: bool = false };
+    const BoozeOptions = struct { cocktail: bool = false, longdrink: bool = false };
+};
+
 test "basic parsing (no verbs)" {
     var titerator = TestIterator.init(&[_][:0]const u8{
         "--output",
@@ -706,4 +714,49 @@ test "shorthand parsing (no verbs)" {
     try std.testing.expectEqual(true, args.options.@"with-offset");
     try std.testing.expectEqual(false, args.options.@"with-hexdump");
     try std.testing.expectEqual(false, args.options.@"intermix-source");
+}
+
+test "basic parsing (with verbs)" {
+    var titerator = TestIterator.init(&[_][:0]const u8{
+        "booze", // verb
+        "--output",
+        "foobar",
+        "--with-offset",
+        "--numberOfBytes",
+        "-250",
+        "--unsigned_number",
+        "0xFF00FF",
+        "positional 1",
+        "--mode",
+        "special",
+        "positional 2",
+        "--cocktail",
+    });
+    var args = try parseInternal(TestGenericOptions, TestVerb, &titerator, std.testing.allocator, .silent);
+    defer args.deinit();
+
+    try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
+    try std.testing.expect(?TestVerb == @TypeOf(args.verb));
+    try std.testing.expectEqual(@as(usize, 2), args.positionals.len);
+    try std.testing.expectEqualStrings("positional 1", args.positionals[0]);
+    try std.testing.expectEqualStrings("positional 2", args.positionals[1]);
+
+    try std.testing.expectEqualStrings("foobar", args.options.output.?);
+
+    try std.testing.expectEqual(@as(?i32, -250), args.options.numberOfBytes);
+    try std.testing.expectEqual(@as(?u64, 0xFF00FF), args.options.unsigned_number);
+    try std.testing.expectEqual(TestEnum.special, args.options.mode);
+
+    try std.testing.expectEqual(@as(?i64, null), args.options.signed_number);
+
+    try std.testing.expectEqual(true, args.options.@"with-offset");
+    try std.testing.expectEqual(false, args.options.@"with-hexdump");
+    try std.testing.expectEqual(false, args.options.@"intermix-source");
+
+    try std.testing.expect(args.verb.? == .booze);
+
+    const booze = args.verb.?.booze;
+
+    try std.testing.expectEqual(true, booze.cocktail);
+    try std.testing.expectEqual(false, booze.longdrink);
 }
