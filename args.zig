@@ -299,7 +299,7 @@ pub fn ParseArgsResult(comptime Generic: type, comptime MaybeVerb: ?type) type {
 
         /// Exports the type of options.
         pub const GenericOptions = Generic;
-        pub const Verbs = Verb;
+        pub const Verbs = MaybeVerb orelse void;
 
         arena: std.heap.ArenaAllocator,
 
