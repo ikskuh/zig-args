@@ -338,6 +338,7 @@ fn requiresArg(comptime T: type) bool {
                 .Int, .Float, .Enum => true,
                 .Bool => false,
                 .Struct, .Union => true,
+                .Pointer => true,
                 else => @compileError(@typeName(Type) ++ " is not a supported argument type!"),
             };
         }
@@ -422,12 +423,9 @@ test "parseInt" {
 }
 
 /// Converts an argument value to the target type.
-fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
-    if (T == []const u8)
-        return textInput;
-
+fn convertArgumentValue(comptime T: type, allocator: *std.mem.Allocator, textInput: []const u8) !T {
     switch (@typeInfo(T)) {
-        .Optional => |opt| return try convertArgumentValue(opt.child, textInput),
+        .Optional => |opt| return try convertArgumentValue(opt.child, allocator, textInput),
         .Bool => if (textInput.len > 0)
             return try parseBoolean(textInput)
         else
@@ -447,6 +445,27 @@ fn convertArgumentValue(comptime T: type, textInput: []const u8) !T {
             } else {
                 @compileError(@typeName(T) ++ " has no public visible `fn parse([]const u8) !T`!");
             }
+        },
+        .Pointer => |ptr| switch (ptr.size) {
+            .Slice => {
+                if (ptr.child != u8) {
+                    @compileError(@typeName(T) ++ " is not a supported pointer type, only slices of u8 are supported");
+                }
+
+                // If the type contains a sentinel dupe the text input to a new buffer.
+                // This is equivalent to allocator.dupeZ but works with any sentinel.
+                if (comptime std.meta.sentinel(T)) |sentinel| {
+                    const data = try allocator.alloc(u8, textInput.len + 1);
+                    std.mem.copy(u8, data, textInput);
+                    data[textInput.len] = sentinel;
+
+                    return data[0..textInput.len :sentinel];
+                }
+
+                // Otherwise the type is []const u8 so just return the text input.
+                return textInput;
+            },
+            else => @compileError(@typeName(T) ++ " is not a supported pointer type!"),
         },
         else => @compileError(@typeName(T) ++ " is not a supported argument type!"),
     }
@@ -483,7 +502,7 @@ fn parseOption(
         // argument is "empty"
         "";
 
-    @field(target_struct, name) = convertArgumentValue(field_type, final_value) catch |err| {
+    @field(target_struct, name) = convertArgumentValue(field_type, arena, final_value) catch |err| {
         last_error.* = err;
         try error_handling.process(err, Error{
             .option = "--" ++ name,
@@ -593,7 +612,7 @@ pub const Error = struct {
 pub const ErrorHandling = union(enum) {
     const Self = @This();
 
-    /// Do not print or process any errors, just 
+    /// Do not print or process any errors, just
     /// return a fitting error on the first argument mismatch.
     silent,
 
@@ -853,4 +872,27 @@ test "shorthand parsing (with verbs)" {
 
     try std.testing.expectEqual(true, booze.cocktail);
     try std.testing.expectEqual(false, booze.longdrink);
+}
+
+test "strings with sentinel" {
+    var titerator = TestIterator.init(&[_][:0]const u8{
+        "--output",
+        "foobar",
+    });
+    var args = try parseInternal(
+        struct {
+            output: ?[:0]const u8 = null,
+        },
+        null,
+        &titerator,
+        std.testing.allocator,
+        .print,
+    );
+    defer args.deinit();
+
+    try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
+    try std.testing.expect(void == @TypeOf(args.verb));
+    try std.testing.expectEqual(@as(usize, 0), args.positionals.len);
+
+    try std.testing.expectEqualStrings("foobar", args.options.output.?);
 }
