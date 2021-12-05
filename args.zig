@@ -4,7 +4,7 @@ const std = @import("std");
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
+pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
     var args = std.process.args();
 
     const executable_name = try (args.next(allocator) orelse {
@@ -29,7 +29,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: *std.mem.Allocator
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
+pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
     var args = std.process.args();
 
     const executable_name = try (args.next(allocator) orelse {
@@ -57,7 +57,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
 /// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, null) {
+pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, null) {
     return parseInternal(Generic, null, args_iterator, allocator, error_handling);
 }
 
@@ -71,12 +71,12 @@ pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: *std.mem
 /// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parseWithVerb(comptime Generic: type, comptime Verb: type, args_iterator: anytype, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, Verb) {
+pub fn parseWithVerb(comptime Generic: type, comptime Verb: type, args_iterator: anytype, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, Verb) {
     return parseInternal(Generic, Verb, args_iterator, allocator, error_handling);
 }
 
 /// Same as parse, but with anytype argument for testability
-fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterator: anytype, allocator: *std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, MaybeVerb) {
+fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterator: anytype, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, MaybeVerb) {
     var result = ParseArgsResult(Generic, MaybeVerb){
         .arena = std.heap.ArenaAllocator.init(allocator),
         .options = Generic{},
@@ -85,13 +85,14 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
         .executable_name = null,
     };
     errdefer result.arena.deinit();
+    var result_arena_allocator = result.arena.allocator();
 
     var arglist = std.ArrayList([:0]const u8).init(allocator);
     errdefer arglist.deinit();
 
     var last_error: ?anyerror = null;
 
-    while (args_iterator.next(&result.arena.allocator)) |item_or_error| {
+    while (args_iterator.next(result_arena_allocator)) |item_or_error| {
         const item = try item_or_error;
 
         if (std.mem.startsWith(u8, item, "--")) {
@@ -119,7 +120,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
             var found = false;
             inline for (std.meta.fields(Generic)) |fld| {
                 if (std.mem.eql(u8, pair.name, fld.name)) {
-                    try parseOption(Generic, &result.arena.allocator, &result.options, args_iterator, error_handling, &last_error, fld.name, pair.value);
+                    try parseOption(Generic, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, fld.name, pair.value);
                     found = true;
                 }
             }
@@ -134,7 +135,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                                     if (std.mem.eql(u8, pair.name, fld.name)) {
                                         try parseOption(
                                             verb_info.field_type,
-                                            &result.arena.allocator,
+                                            result_arena_allocator,
                                             &@field(verb.*, verb_info.name),
                                             args_iterator,
                                             error_handling,
@@ -184,7 +185,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                                         .kind = .invalid_placement,
                                     });
                                 } else {
-                                    try parseOption(Generic, &result.arena.allocator, &result.options, args_iterator, error_handling, &last_error, real_name, null);
+                                    try parseOption(Generic, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, real_name, null);
                                 }
 
                                 found = true;
@@ -217,7 +218,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                                                             .kind = .invalid_placement,
                                                         });
                                                     } else {
-                                                        try parseOption(VerbType, &result.arena.allocator, target_value, args_iterator, error_handling, &last_error, real_name, null);
+                                                        try parseOption(VerbType, result_arena_allocator, target_value, args_iterator, error_handling, &last_error, real_name, null);
                                                     }
                                                     last_error = null; // we need to reset that error here, as it was set previously
                                                     found = true;
@@ -274,7 +275,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     // This will consume the rest of the arguments as positional ones.
     // Only executes when the above loop is broken.
-    while (args_iterator.next(&result.arena.allocator)) |item_or_error| {
+    while (args_iterator.next(result_arena_allocator)) |item_or_error| {
         const item = try item_or_error;
         try arglist.append(item);
     }
@@ -423,7 +424,7 @@ test "parseInt" {
 }
 
 /// Converts an argument value to the target type.
-fn convertArgumentValue(comptime T: type, allocator: *std.mem.Allocator, textInput: []const u8) !T {
+fn convertArgumentValue(comptime T: type, allocator: std.mem.Allocator, textInput: []const u8) !T {
     switch (@typeInfo(T)) {
         .Optional => |opt| return try convertArgumentValue(opt.child, allocator, textInput),
         .Bool => if (textInput.len > 0)
@@ -474,7 +475,7 @@ fn convertArgumentValue(comptime T: type, allocator: *std.mem.Allocator, textInp
 /// Parses an option value into the correct type.
 fn parseOption(
     comptime Spec: type,
-    arena: *std.mem.Allocator,
+    arena: std.mem.Allocator,
     target_struct: *Spec,
     args: anytype,
     error_handling: ErrorHandling,
@@ -521,7 +522,7 @@ pub const ErrorCollection = struct {
     arena: std.heap.ArenaAllocator,
     list: std.ArrayList(Error),
 
-    pub fn init(allocator: *std.mem.Allocator) Self {
+    pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .arena = std.heap.ArenaAllocator.init(allocator),
             .list = std.ArrayList(Error).init(allocator),
@@ -542,10 +543,10 @@ pub const ErrorCollection = struct {
     /// Appends an error to the collection
     fn insert(self: *Self, err: Error) !void {
         var dupe = Error{
-            .option = try self.arena.allocator.dupe(u8, err.option),
+            .option = try self.arena.allocator().dupe(u8, err.option),
             .kind = switch (err.kind) {
                 .invalid_value => |v| Error.Kind{
-                    .invalid_value = try self.arena.allocator.dupe(u8, v),
+                    .invalid_value = try self.arena.allocator().dupe(u8, v),
                 },
                 // flat copy
                 .unknown, .out_of_memory, .unsupported, .invalid_placement, .missing_argument, .missing_executable_name, .unknown_verb => err.kind,
@@ -666,7 +667,7 @@ const TestIterator = struct {
         return TestIterator{ .sequence = items };
     }
 
-    pub fn next(self: *@This(), allocator: *std.mem.Allocator) ?(error{OutOfMemory}![:0]u8) {
+    pub fn next(self: *@This(), allocator: std.mem.Allocator) ?(error{OutOfMemory}![:0]u8) {
         if (self.index >= self.sequence.len)
             return null;
         const result = try allocator.dupeZ(u8, self.sequence[self.index]);
