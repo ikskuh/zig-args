@@ -7,7 +7,7 @@ const std = @import("std");
 pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
     var args = std.process.args();
 
-    const executable_name = try (args.next(allocator) orelse {
+    const executable_name = (try args.next(allocator)) orelse {
         try error_handling.process(error.NoExecutableName, Error{
             .option = "",
             .kind = .missing_executable_name,
@@ -15,7 +15,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
 
         // we do not assume any more arguments appear here anyways...
         return error.NoExecutableName;
-    });
+    };
     errdefer allocator.free(executable_name);
 
     var result = try parseInternal(Spec, null, &args, allocator, error_handling);
@@ -32,7 +32,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
 pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
     var args = std.process.args();
 
-    const executable_name = try (args.next(allocator) orelse {
+    const executable_name = (try args.next(allocator)) orelse {
         try error_handling.process(error.NoExecutableName, Error{
             .option = "",
             .kind = .missing_executable_name,
@@ -40,7 +40,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
 
         // we do not assume any more arguments appear here anyways...
         return error.NoExecutableName;
-    });
+    };
     errdefer allocator.free(executable_name);
 
     var result = try parseInternal(Spec, Verb, &args, allocator, error_handling);
@@ -92,9 +92,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     var last_error: ?anyerror = null;
 
-    while (args_iterator.next(result_arena_allocator)) |item_or_error| {
-        const item = try item_or_error;
-
+    while (try args_iterator.next(result_arena_allocator)) |item| {
         if (std.mem.startsWith(u8, item, "--")) {
             if (std.mem.eql(u8, item, "--")) {
                 // double hyphen is considered 'everything from here now is positional'
@@ -275,8 +273,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     // This will consume the rest of the arguments as positional ones.
     // Only executes when the above loop is broken.
-    while (args_iterator.next(result_arena_allocator)) |item_or_error| {
-        const item = try item_or_error;
+    while (try args_iterator.next(result_arena_allocator)) |item| {
         try arglist.append(item);
     }
 
@@ -491,14 +488,14 @@ fn parseOption(
         val // use the literal value
     else if (requiresArg(field_type))
         // fetch from parser
-        try (args.next(arena) orelse {
+        (try args.next(arena)) orelse {
             last_error.* = error.MissingArgument;
             try error_handling.process(error.MissingArgument, Error{
                 .option = "--" ++ name,
                 .kind = .missing_argument,
             });
             return;
-        })
+        }
     else
         // argument is "empty"
         "";
