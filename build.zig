@@ -1,9 +1,16 @@
 const std = @import("std");
 
 pub fn build(b: *std.build.Builder) void {
+    const mode = b.standardReleaseOptions();
+    const target = b.standardTargetOptions(.{});
+
     const test_runner = b.addTest("args.zig");
+    test_runner.setBuildMode(mode);
+    test_runner.setTarget(target);
 
     const test_exe = b.addExecutable("demo", "demo.zig");
+    test_exe.setBuildMode(mode);
+    test_exe.setTarget(target);
 
     const run_1 = test_exe.run();
     run_1.addArgs(&[_][]const u8{
