@@ -676,10 +676,10 @@ const TestIterator = struct {
         return TestIterator{ .sequence = items };
     }
 
-    pub fn next(self: *@This(), allocator: std.mem.Allocator) error{OutOfMemory}!?[:0]u8 {
+    pub fn next(self: *@This()) ?[:0]const u8 {
         if (self.index >= self.sequence.len)
             return null;
-        const result = try allocator.dupeZ(u8, self.sequence[self.index]);
+        const result = self.sequence[self.index];
         self.index += 1;
         return result;
     }
