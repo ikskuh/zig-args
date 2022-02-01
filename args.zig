@@ -5,9 +5,13 @@ const std = @import("std");
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
 pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
-    var args = std.process.args();
+    // Use argsWithAllocator for portability.
+    // All data allocated by the ArgIterator is freed at the end of the function.
+    // Data returned to the user is always duplicated using the allocator.
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
 
-    const executable_name = (try args.next(allocator)) orelse {
+    const executable_name = args.next() orelse {
         try error_handling.process(error.NoExecutableName, Error{
             .option = "",
             .kind = .missing_executable_name,
@@ -16,11 +20,10 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
         // we do not assume any more arguments appear here anyways...
         return error.NoExecutableName;
     };
-    errdefer allocator.free(executable_name);
 
     var result = try parseInternal(Spec, null, &args, allocator, error_handling);
 
-    result.executable_name = executable_name;
+    result.executable_name = try allocator.dupeZ(u8, executable_name);
 
     return result;
 }
@@ -30,7 +33,11 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
 pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
-    var args = std.process.args();
+    // Use argsWithAllocator for portability.
+    // All data allocated by the ArgIterator is freed at the end of the function.
+    // Data returned to the user is always duplicated using the allocator.
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
 
     const executable_name = (try args.next(allocator)) orelse {
         try error_handling.process(error.NoExecutableName, Error{
@@ -41,11 +48,10 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
         // we do not assume any more arguments appear here anyways...
         return error.NoExecutableName;
     };
-    errdefer allocator.free(executable_name);
 
     var result = try parseInternal(Spec, Verb, &args, allocator, error_handling);
 
-    result.executable_name = executable_name;
+    result.executable_name = try allocator.dupeZ(u8, executable_name);
 
     return result;
 }
@@ -92,7 +98,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     var last_error: ?anyerror = null;
 
-    while (try args_iterator.next(result_arena_allocator)) |item| {
+    while (args_iterator.next()) |item| {
         if (std.mem.startsWith(u8, item, "--")) {
             if (std.mem.eql(u8, item, "--")) {
                 // double hyphen is considered 'everything from here now is positional'
@@ -160,7 +166,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
         } else if (std.mem.startsWith(u8, item, "-")) {
             if (std.mem.eql(u8, item, "-")) {
                 // single hyphen is considered a positional argument
-                try arglist.append(item);
+                try arglist.append(try result_arena_allocator.dupeZ(u8, item));
             } else {
                 var any_shorthands = false;
                 for (item[1..]) |char, index| {
@@ -264,7 +270,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                 }
             }
 
-            try arglist.append(item);
+            try arglist.append(try result_arena_allocator.dupeZ(u8, item));
         }
     }
 
@@ -273,8 +279,8 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     // This will consume the rest of the arguments as positional ones.
     // Only executes when the above loop is broken.
-    while (try args_iterator.next(result_arena_allocator)) |item| {
-        try arglist.append(item);
+    while (args_iterator.next()) |item| {
+        try arglist.append(try result_arena_allocator.dupeZ(u8, item));
     }
 
     result.positionals = arglist.toOwnedSlice();
@@ -484,21 +490,27 @@ fn parseOption(
 ) !void {
     const field_type = @TypeOf(@field(target_struct, name));
 
-    const final_value = if (value) |val|
-        val // use the literal value
-    else if (requiresArg(field_type))
+    const final_value = if (value) |val| blk: {
+        // use the literal value
+        const res = try arena.dupeZ(u8, val);
+        break :blk res;
+    } else if (requiresArg(field_type)) blk: {
         // fetch from parser
-        (try args.next(arena)) orelse {
+        const val = args.next() orelse {
             last_error.* = error.MissingArgument;
             try error_handling.process(error.MissingArgument, Error{
                 .option = "--" ++ name,
                 .kind = .missing_argument,
             });
             return;
-        }
-    else
+        };
+
+        const res = try arena.dupeZ(u8, val);
+        break :blk res;
+    } else blk: {
         // argument is "empty"
-        "";
+        break :blk "";
+    };
 
     @field(target_struct, name) = convertArgumentValue(field_type, arena, final_value) catch |err| {
         last_error.* = err;
