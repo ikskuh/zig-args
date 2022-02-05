@@ -39,7 +39,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
 
-    const executable_name = (try args.next(allocator)) orelse {
+    const executable_name = (try args.next()) orelse {
         try error_handling.process(error.NoExecutableName, Error{
             .option = "",
             .kind = .missing_executable_name,
