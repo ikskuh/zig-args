@@ -496,16 +496,17 @@ fn parseOption(
         break :blk res;
     } else if (requiresArg(field_type)) blk: {
         // fetch from parser
-        const val = args.next() orelse {
+        const val = args.next();
+        if (val == null or std.mem.eql(u8, val.?, "--")) {
             last_error.* = error.MissingArgument;
             try error_handling.process(error.MissingArgument, Error{
                 .option = "--" ++ name,
                 .kind = .missing_argument,
             });
             return;
-        };
+        }
 
-        const res = try arena.dupeZ(u8, val);
+        const res = try arena.dupeZ(u8, val.?);
         break :blk res;
     } else blk: {
         // argument is "empty"
@@ -905,4 +906,22 @@ test "strings with sentinel" {
     try std.testing.expectEqual(@as(usize, 0), args.positionals.len);
 
     try std.testing.expectEqualStrings("foobar", args.options.output.?);
+}
+
+test "option argument --" {
+    var titerator = TestIterator.init(&[_][:0]const u8{
+        "--output",
+        "--",
+    });
+
+    try std.testing.expectError(error.MissingArgument, parseInternal(
+        struct {
+            output: ?[:0]const u8 = null,
+        },
+        null,
+        &titerator,
+        std.testing.allocator,
+        .silent,
+    ));
+
 }
