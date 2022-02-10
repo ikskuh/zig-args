@@ -5,7 +5,15 @@ pub fn main() !u8 {
     var argsAllocator = std.heap.page_allocator;
 
     const options = argsParser.parseWithVerbForCurrentProcess(
-        struct {},
+        struct {
+            // this declares long option that can come before or after verb
+            output: ?[]const u8 = null,
+
+            // This declares short-hand options for single hyphen
+            pub const shorthands = .{
+                .o = "output",
+            };
+        },
         union(enum) {
             compact: struct {
                 // This declares long options for double hyphen
@@ -36,6 +44,14 @@ pub fn main() !u8 {
 
     std.debug.print("executable name: {s}\n", .{options.executable_name});
 
+    // non-verb/global options
+    inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
+        std.debug.print("\t{s} = {any}\n", .{
+            fld.name,
+            @field(options.options, fld.name),
+        });
+    }
+    // verb options
     switch (options.verb.?) {
         .compact => |opts| {
             inline for (std.meta.fields(@TypeOf(opts))) |fld| {
