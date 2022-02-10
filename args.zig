@@ -797,9 +797,9 @@ test "shorthand parsing (no verbs)" {
 
 test "basic parsing (with verbs)" {
     var titerator = TestIterator.init(&[_][:0]const u8{
-        "booze", // verb
-        "--output",
+        "--output",  // non-verb options can come before or after verb
         "foobar",
+        "booze", // verb
         "--with-offset",
         "--numberOfBytes",
         "-250",
