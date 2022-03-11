@@ -102,6 +102,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
         if (std.mem.startsWith(u8, item, "--")) {
             if (std.mem.eql(u8, item, "--")) {
                 // double hyphen is considered 'everything from here now is positional'
+                result.raw_start_index = arglist.items.len;
                 break;
             }
 
@@ -316,6 +317,9 @@ pub fn ParseArgsResult(comptime Generic: type, comptime MaybeVerb: ?type) type {
 
         /// The positional arguments that were passed to the process.
         positionals: [][:0]const u8,
+
+        // The index of the first "raw arg", meaning the first arg after "--"
+        raw_start_index: ?usize = null,
 
         /// Name of the executable file (or: zeroth argument)
         executable_name: ?[:0]const u8,
@@ -923,5 +927,20 @@ test "option argument --" {
         std.testing.allocator,
         .silent,
     ));
+}
 
+test "index of raw indicator --" {
+    var titerator = TestIterator.init(&[_][:0]const u8{ "stdin", "-", "--", "not-stdin", "-", "--" });
+
+    var args = try parseInternal(
+        struct {},
+        null,
+        &titerator,
+        std.testing.allocator,
+        .print,
+    );
+    defer args.deinit();
+
+    try std.testing.expectEqual(args.raw_start_index, 2);
+    try std.testing.expectEqual(args.positionals.len, 5);
 }
