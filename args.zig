@@ -85,7 +85,6 @@ pub fn parseWithVerb(comptime Generic: type, comptime Verb: type, args_iterator:
 fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterator: anytype, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, MaybeVerb) {
     var result = ParseArgsResult(Generic, MaybeVerb){
         .arena = std.heap.ArenaAllocator.init(allocator),
-        .options = Generic{},
         .verb = if (MaybeVerb != null) null else {}, // no verb by default
         .positionals = undefined,
         .executable_name = null,
@@ -97,6 +96,21 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
     errdefer arglist.deinit();
 
     var last_error: ?anyerror = null;
+
+    // Create map for required arguments
+    var required_map = std.StringHashMap(bool).init(allocator);
+    defer required_map.deinit();
+
+    // Add the generic arguments
+    // and init defaults
+    inline for (std.meta.fields(Generic)) |field| {
+        if (field.default_value) |default_value_ptr| {
+            const default_value = @ptrCast(*const field.field_type, default_value_ptr).*;
+            @field(result.options, field.name) = default_value;
+        } else {
+            try required_map.put(field.name, true);
+        }
+    }
 
     while (args_iterator.next()) |item| {
         if (std.mem.startsWith(u8, item, "--")) {
@@ -127,7 +141,16 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                 if (std.mem.eql(u8, pair.name, fld.name)) {
                     try parseOption(Generic, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, fld.name, pair.value);
                     found = true;
+                    _ = required_map.remove(fld.name);
                 }
+            }
+
+            if (required_map.count() > 0) {
+                last_error = error.MissingRequiredArgument;
+                try error_handling.process(error.MissingRequiredArgument, Error{
+                    .option = "",
+                    .kind = .unknown,
+                });
             }
 
             if (MaybeVerb) |Verb| {
@@ -309,7 +332,7 @@ pub fn ParseArgsResult(comptime Generic: type, comptime MaybeVerb: ?type) type {
         arena: std.heap.ArenaAllocator,
 
         /// The options with either default or set values.
-        options: Generic,
+        options: Generic = undefined,
 
         /// The verb that was parsed or `null` if no first positional was provided.
         /// Is `void` when verb parsing is disabled
@@ -801,7 +824,7 @@ test "shorthand parsing (no verbs)" {
 
 test "basic parsing (with verbs)" {
     var titerator = TestIterator.init(&[_][:0]const u8{
-        "--output",  // non-verb options can come before or after verb
+        "--output", // non-verb options can come before or after verb
         "foobar",
         "booze", // verb
         "--with-offset",
@@ -943,4 +966,41 @@ test "index of raw indicator --" {
 
     try std.testing.expectEqual(args.raw_start_index, 2);
     try std.testing.expectEqual(args.positionals.len, 5);
+}
+
+test "required argument --" {
+    var titerator = TestIterator.init(&[_][:0]const u8{
+        "--output",
+        "foobar",
+    });
+    {
+        var args = try parseInternal(
+            struct {
+                output: ?[:0]const u8 = "test",
+            },
+            null,
+            &titerator,
+            std.testing.allocator,
+            .print,
+        );
+        defer args.deinit();
+
+        try std.testing.expectEqualStrings("foobar", args.options.output.?);
+    }
+
+    {
+        var titerator_none = TestIterator.init(&[_][:0]const u8{});
+        var args = try parseInternal(
+            struct {
+                output: ?[:0]const u8 = "test",
+            },
+            null,
+            &titerator_none,
+            std.testing.allocator,
+            .print,
+        );
+        defer args.deinit();
+
+        try std.testing.expectEqualStrings("test", args.options.output.?);
+    }
 }
