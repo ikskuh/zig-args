@@ -297,9 +297,20 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     if (required_map.count() > 0) {
         last_error = error.MissingRequiredArgument;
+
+        var option_buffer = std.ArrayList(u8).init(allocator);
+        var writer = option_buffer.writer();
+
+        _ = try writer.write("[");
+        var it = required_map.keyIterator();
+        while (it.next()) |value| {
+            try writer.print("{s} ", .{value.*});
+        }
+        _ = try writer.write("]");
+
         try error_handling.process(error.MissingRequiredArgument, Error{
-            .option = "",
-            .kind = .unknown,
+            .option = option_buffer.toOwnedSlice(),
+            .kind = .missing_argument,
         });
         return error.MissingRequiredArgument;
     }
@@ -935,6 +946,9 @@ test "shorthand parsing (with verbs)" {
 }
 
 test "shorthand parsing (with verbs and required)" {
+    var allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer allocator.deinit();
+
     var titerator_magic = TestIterator.init(&[_][:0]const u8{
         "magic", // verb
     });
@@ -955,14 +969,14 @@ test "shorthand parsing (with verbs and required)" {
     });
 
     {
-        var args = try parseInternal(TestGenericOptions, TestVerbRequired, &titerator_magic, std.testing.allocator, .print);
+        var args = try parseInternal(TestGenericOptions, TestVerbRequired, &titerator_magic, allocator.allocator(), .print);
         defer args.deinit();
         try std.testing.expect(?TestVerbRequired == @TypeOf(args.verb));
         try std.testing.expect(args.verb.? == .magic);
     }
 
     {
-        var args = try parseInternal(TestGenericOptions, TestVerbRequired, &titerator_short, std.testing.allocator, .print);
+        var args = try parseInternal(TestGenericOptions, TestVerbRequired, &titerator_short, allocator.allocator(), .print);
         defer args.deinit();
         try std.testing.expect(?TestVerbRequired == @TypeOf(args.verb));
         try std.testing.expect(args.verb.? == .booze);
@@ -972,7 +986,7 @@ test "shorthand parsing (with verbs and required)" {
     }
 
     {
-        var args = try parseInternal(TestGenericOptions, TestVerbRequired, &titerator_long, std.testing.allocator, .print);
+        var args = try parseInternal(TestGenericOptions, TestVerbRequired, &titerator_long, allocator.allocator(), .print);
         defer args.deinit();
         try std.testing.expect(?TestVerbRequired == @TypeOf(args.verb));
         try std.testing.expect(args.verb.? == .booze);
@@ -982,7 +996,7 @@ test "shorthand parsing (with verbs and required)" {
     }
 
     {
-        try std.testing.expectError(error.MissingRequiredArgument, parseInternal(TestGenericOptions, TestVerbRequired, &titerator_missing, std.testing.allocator, .print));
+        try std.testing.expectError(error.MissingRequiredArgument, parseInternal(TestGenericOptions, TestVerbRequired, &titerator_missing, allocator.allocator(), .print));
     }
 }
 
