@@ -298,20 +298,13 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
     if (required_map.count() > 0) {
         last_error = error.MissingRequiredArgument;
 
-        var option_buffer = std.ArrayList(u8).init(allocator);
-        var writer = option_buffer.writer();
-
-        _ = try writer.write("[");
         var it = required_map.keyIterator();
-        while (it.next()) |value| {
-            try writer.print("{s} ", .{value.*});
+        while (it.next()) |option| {
+            try error_handling.process(error.MissingRequiredArgument, Error{
+                .option = option.*,
+                .kind = .missing_argument,
+            });
         }
-        _ = try writer.write("]");
-
-        try error_handling.process(error.MissingRequiredArgument, Error{
-            .option = option_buffer.toOwnedSlice(),
-            .kind = .missing_argument,
-        });
         return error.MissingRequiredArgument;
     }
 
