@@ -88,6 +88,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
         .verb = if (MaybeVerb != null) null else {}, // no verb by default
         .positionals = undefined,
         .executable_name = null,
+        .options = undefined,
     };
     errdefer result.arena.deinit();
     var result_arena_allocator = result.arena.allocator();
@@ -342,7 +343,7 @@ pub fn ParseArgsResult(comptime Generic: type, comptime MaybeVerb: ?type) type {
         arena: std.heap.ArenaAllocator,
 
         /// The options with either default or set values.
-        options: Generic = undefined,
+        options: Generic,
 
         /// The verb that was parsed or `null` if no first positional was provided.
         /// Is `void` when verb parsing is disabled
