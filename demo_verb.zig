@@ -42,7 +42,7 @@ pub fn main() !u8 {
     ) catch return 1;
     defer options.deinit();
 
-    std.debug.print("executable name: {s}\n", .{options.executable_name});
+    std.debug.print("executable name: {?s}\n", .{options.executable_name});
 
     // non-verb/global options
     inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
