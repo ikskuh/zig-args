@@ -136,19 +136,21 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                         const Tag = std.meta.Tag(Verb);
                         inline for (std.meta.fields(Verb)) |verb_info| {
                             if (verb.* == @field(Tag, verb_info.name)) {
-                                inline for (std.meta.fields(verb_info.field_type)) |fld| {
-                                    if (std.mem.eql(u8, pair.name, fld.name)) {
-                                        try parseOption(
-                                            verb_info.field_type,
-                                            result_arena_allocator,
-                                            &@field(verb.*, verb_info.name),
-                                            args_iterator,
-                                            error_handling,
-                                            &last_error,
-                                            fld.name,
-                                            pair.value,
-                                        );
-                                        found = true;
+                                if (comptime canHaveFieldsAndIsNotZeroSized(verb_info.field_type)) {
+                                    inline for (std.meta.fields(verb_info.field_type)) |fld| {
+                                        if (std.mem.eql(u8, pair.name, fld.name)) {
+                                            try parseOption(
+                                                verb_info.field_type,
+                                                result_arena_allocator,
+                                                &@field(verb.*, verb_info.name),
+                                                args_iterator,
+                                                error_handling,
+                                                &last_error,
+                                                fld.name,
+                                                pair.value,
+                                            );
+                                            found = true;
+                                        }
                                     }
                                 }
                             }
@@ -204,29 +206,31 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                                 const Tag = std.meta.Tag(Verb);
                                 inline for (std.meta.fields(Verb)) |verb_info| {
                                     const VerbType = verb_info.field_type;
-                                    if (verb.* == @field(Tag, verb_info.name)) {
-                                        const target_value = &@field(verb.*, verb_info.name);
-                                        if (@hasDecl(VerbType, "shorthands")) {
-                                            any_shorthands = true;
-                                            inline for (std.meta.fields(@TypeOf(VerbType.shorthands))) |fld| {
-                                                if (fld.name.len != 1)
-                                                    @compileError("All shorthand fields must be exactly one character long!");
-                                                if (fld.name[0] == char) {
-                                                    const real_name = @field(VerbType.shorthands, fld.name);
-                                                    const real_fld_type = @TypeOf(@field(target_value.*, real_name));
+                                    if (comptime canHaveFieldsAndIsNotZeroSized(VerbType)) {
+                                        if (verb.* == @field(Tag, verb_info.name)) {
+                                            const target_value = &@field(verb.*, verb_info.name);
+                                            if (@hasDecl(VerbType, "shorthands")) {
+                                                any_shorthands = true;
+                                                inline for (std.meta.fields(@TypeOf(VerbType.shorthands))) |fld| {
+                                                    if (fld.name.len != 1)
+                                                        @compileError("All shorthand fields must be exactly one character long!");
+                                                    if (fld.name[0] == char) {
+                                                        const real_name = @field(VerbType.shorthands, fld.name);
+                                                        const real_fld_type = @TypeOf(@field(target_value.*, real_name));
 
-                                                    // -2 because we stripped of the "-" at the beginning
-                                                    if (requiresArg(real_fld_type) and index != item.len - 2) {
-                                                        last_error = error.EncounteredUnexpectedArgument;
-                                                        try error_handling.process(error.EncounteredUnexpectedArgument, Error{
-                                                            .option = &option_name,
-                                                            .kind = .invalid_placement,
-                                                        });
-                                                    } else {
-                                                        try parseOption(VerbType, result_arena_allocator, target_value, args_iterator, error_handling, &last_error, real_name, null);
+                                                        // -2 because we stripped of the "-" at the beginning
+                                                        if (requiresArg(real_fld_type) and index != item.len - 2) {
+                                                            last_error = error.EncounteredUnexpectedArgument;
+                                                            try error_handling.process(error.EncounteredUnexpectedArgument, Error{
+                                                                .option = &option_name,
+                                                                .kind = .invalid_placement,
+                                                            });
+                                                        } else {
+                                                            try parseOption(VerbType, result_arena_allocator, target_value, args_iterator, error_handling, &last_error, real_name, null);
+                                                        }
+                                                        last_error = null; // we need to reset that error here, as it was set previously
+                                                        found = true;
                                                     }
-                                                    last_error = null; // we need to reset that error here, as it was set previously
-                                                    found = true;
                                                 }
                                             }
                                         }
@@ -286,6 +290,13 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     result.positionals = arglist.toOwnedSlice();
     return result;
+}
+
+fn canHaveFieldsAndIsNotZeroSized(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .Struct, .Union, .Enum, .ErrorSet => @sizeOf(T) != 0,
+        else => false,
+    };
 }
 
 /// The return type of the argument parser.
@@ -801,7 +812,7 @@ test "shorthand parsing (no verbs)" {
 
 test "basic parsing (with verbs)" {
     var titerator = TestIterator.init(&[_][:0]const u8{
-        "--output",  // non-verb options can come before or after verb
+        "--output", // non-verb options can come before or after verb
         "foobar",
         "booze", // verb
         "--with-offset",

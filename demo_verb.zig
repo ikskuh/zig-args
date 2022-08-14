@@ -36,6 +36,8 @@ pub fn main() !u8 {
                     .f = "force",
                 };
             },
+            forward: void,
+            @"zero-sized": struct {},
         },
         argsAllocator,
         .print,
@@ -69,6 +71,8 @@ pub fn main() !u8 {
                 });
             }
         },
+        .forward => std.debug.print("\t`forward` verb with no options received\n", .{}),
+        .@"zero-sized" => std.debug.print("\t`zero-sized` verb received\n", .{}),
     }
 
     std.debug.print("parsed positionals:\n", .{});
