@@ -305,7 +305,7 @@ pub fn ParseArgsResult(comptime Generic: type, comptime MaybeVerb: ?type) type {
         @compileError("Generic argument definition must be a struct");
 
     if (MaybeVerb) |Verb| {
-        const ti: std.builtin.TypeInfo = @typeInfo(Verb);
+        const ti: std.builtin.Type = @typeInfo(Verb);
         if (ti != .Union or ti.Union.tag_type == null)
             @compileError("Verb must be a tagged union");
     }
