@@ -536,7 +536,7 @@ fn parseOption(
         });
         // we couldn't parse the value, so we return a undefined value as we have signalled an
         // error and won't return this anyways.
-        return undefined;
+        return;
     };
 }
 
