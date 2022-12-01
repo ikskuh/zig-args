@@ -94,7 +94,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
     var result_arena_allocator = result.arena.allocator();
 
     var arglist = std.ArrayList([:0]const u8).init(allocator);
-    errdefer arglist.deinit();
+    defer arglist.deinit();
 
     var last_error: ?anyerror = null;
 
@@ -288,7 +288,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
         try arglist.append(try result_arena_allocator.dupeZ(u8, item));
     }
 
-    result.positionals = arglist.toOwnedSlice();
+    result.positionals = try arglist.toOwnedSlice();
     return result;
 }
 
