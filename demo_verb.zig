@@ -54,25 +54,27 @@ pub fn main() !u8 {
         });
     }
     // verb options
-    switch (options.verb.?) {
-        .compact => |opts| {
-            inline for (std.meta.fields(@TypeOf(opts))) |fld| {
-                std.debug.print("\t{s} = {any}\n", .{
-                    fld.name,
-                    @field(opts, fld.name),
-                });
-            }
-        },
-        .reload => |opts| {
-            inline for (std.meta.fields(@TypeOf(opts))) |fld| {
-                std.debug.print("\t{s} = {any}\n", .{
-                    fld.name,
-                    @field(opts, fld.name),
-                });
-            }
-        },
-        .forward => std.debug.print("\t`forward` verb with no options received\n", .{}),
-        .@"zero-sized" => std.debug.print("\t`zero-sized` verb received\n", .{}),
+    if (options.verb) |verb| {
+        switch (verb) {
+            .compact => |opts| {
+                inline for (std.meta.fields(@TypeOf(opts))) |fld| {
+                    std.debug.print("\t{s} = {any}\n", .{
+                        fld.name,
+                        @field(opts, fld.name),
+                    });
+                }
+            },
+            .reload => |opts| {
+                inline for (std.meta.fields(@TypeOf(opts))) |fld| {
+                    std.debug.print("\t{s} = {any}\n", .{
+                        fld.name,
+                        @field(opts, fld.name),
+                    });
+                }
+            },
+            .forward => std.debug.print("\t`forward` verb with no options received\n", .{}),
+            .@"zero-sized" => std.debug.print("\t`zero-sized` verb received\n", .{}),
+        }
     }
 
     std.debug.print("parsed positionals:\n", .{});
