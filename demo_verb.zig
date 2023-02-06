@@ -1,5 +1,5 @@
 const std = @import("std");
-const argsParser = @import("args.zig");
+const argsParser = @import("args");
 
 pub fn main() !u8 {
     var argsAllocator = std.heap.page_allocator;
