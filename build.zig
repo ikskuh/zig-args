@@ -1,18 +1,27 @@
 const std = @import("std");
 
 pub fn build(b: *std.build.Builder) void {
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
-    const test_runner = b.addTest("args.zig");
-    test_runner.setBuildMode(mode);
-    test_runner.setTarget(target);
+    const args_mod = b.createModule(.{ .source_file = .{ .path = "args.zig" } });
+    b.modules.put(b.dupe("args"), args_mod) catch @panic("OOM");
+
+    const test_runner = b.addTest(.{
+        .root_source_file = .{ .path = "args.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
 
     // Standard demo
 
-    const demo_exe = b.addExecutable("demo", "demo.zig");
-    demo_exe.setBuildMode(mode);
-    demo_exe.setTarget(target);
+    const demo_exe = b.addExecutable(.{
+        .name = "demo",
+        .root_source_file = .{ .path = "demo.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
+    demo_exe.addModule("args", args_mod);
 
     const run_demo = demo_exe.run();
     run_demo.addArgs(&[_][]const u8{
@@ -21,9 +30,13 @@ pub fn build(b: *std.build.Builder) void {
 
     // Demo with verbs
 
-    const demo_verb_exe = b.addExecutable("demo_verb", "demo_verb.zig");
-    demo_verb_exe.setBuildMode(mode);
-    demo_verb_exe.setTarget(target);
+    const demo_verb_exe = b.addExecutable(.{
+        .name = "demo_verb",
+        .root_source_file = .{ .path = "demo_verb.zig" },
+        .optimize = optimize,
+        .target = target,
+    });
+    demo_verb_exe.addModule("args", args_mod);
 
     const run_demo_verb_1 = demo_verb_exe.run();
     run_demo_verb_1.addArgs(&[_][]const u8{
