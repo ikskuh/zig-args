@@ -607,7 +607,7 @@ pub const Error = struct {
         }
     }
 
-    const Kind = union(enum) {
+    pub const Kind = union(enum) {
         /// When the argument itself is unknown
         unknown,
 
