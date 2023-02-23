@@ -172,7 +172,7 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
                 try arglist.append(try result_arena_allocator.dupeZ(u8, item));
             } else {
                 var any_shorthands = false;
-                for (item[1..]) |char, index| {
+                for (item[1..], 0..) |char, index| {
                     var option_name = [2]u8{ '-', char };
                     var found = false;
                     if (@hasDecl(Generic, "shorthands")) {
