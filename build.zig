@@ -4,8 +4,7 @@ pub fn build(b: *std.build.Builder) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
-    const args_mod = b.createModule(.{ .source_file = .{ .path = "args.zig" } });
-    b.modules.put(b.dupe("args"), args_mod) catch @panic("OOM");
+    const args_mod = b.addModule("args", .{ .source_file = .{ .path = "args.zig" } });
 
     const test_runner = b.addTest(.{
         .root_source_file = .{ .path = "args.zig" },
