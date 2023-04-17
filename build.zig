@@ -22,7 +22,7 @@ pub fn build(b: *std.build.Builder) void {
     });
     demo_exe.addModule("args", args_mod);
 
-    const run_demo = demo_exe.run();
+    const run_demo = b.addRunArtifact(demo_exe);
     run_demo.addArgs(&[_][]const u8{
         "--output", "demo", "--with-offset", "--signed_number=-10", "--unsigned_number", "20", "--mode", "slow", "help", "this", "is", "borked",
     });
@@ -37,19 +37,19 @@ pub fn build(b: *std.build.Builder) void {
     });
     demo_verb_exe.addModule("args", args_mod);
 
-    const run_demo_verb_1 = demo_verb_exe.run();
+    const run_demo_verb_1 = b.addRunArtifact(demo_verb_exe);
     run_demo_verb_1.addArgs(&[_][]const u8{
         "compact", "--host=localhost", "-p", "4030", "--mode", "fast", "help", "this", "is", "borked",
     });
-    const run_demo_verb_2 = demo_verb_exe.run();
+    const run_demo_verb_2 = b.addRunArtifact(demo_verb_exe);
     run_demo_verb_2.addArgs(&[_][]const u8{
         "reload", "-f",
     });
-    const run_demo_verb_3 = demo_verb_exe.run();
+    const run_demo_verb_3 = b.addRunArtifact(demo_verb_exe);
     run_demo_verb_3.addArgs(&[_][]const u8{
         "forward",
     });
-    const run_demo_verb_4 = demo_verb_exe.run();
+    const run_demo_verb_4 = b.addRunArtifact(demo_verb_exe);
     run_demo_verb_4.addArgs(&[_][]const u8{
         "zero-sized",
     });
