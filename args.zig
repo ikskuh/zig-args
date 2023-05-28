@@ -4,7 +4,7 @@ const std = @import("std");
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
+pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
     // Use argsWithAllocator for portability.
     // All data allocated by the ArgIterator is freed at the end of the function.
     // Data returned to the user is always duplicated using the allocator.
@@ -32,7 +32,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
+pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
     // Use argsWithAllocator for portability.
     // All data allocated by the ArgIterator is freed at the end of the function.
     // Data returned to the user is always duplicated using the allocator.
@@ -63,7 +63,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
 /// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, null) {
+pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Generic, null) {
     return parseInternal(Generic, null, args_iterator, allocator, error_handling);
 }
 
@@ -77,12 +77,12 @@ pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: std.mem.
 /// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parseWithVerb(comptime Generic: type, comptime Verb: type, args_iterator: anytype, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, Verb) {
+pub fn parseWithVerb(comptime Generic: type, comptime Verb: type, args_iterator: anytype, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Generic, Verb) {
     return parseInternal(Generic, Verb, args_iterator, allocator, error_handling);
 }
 
 /// Same as parse, but with anytype argument for testability
-fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterator: anytype, allocator: std.mem.Allocator, error_handling: ErrorHandling) !ParseArgsResult(Generic, MaybeVerb) {
+fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterator: anytype, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Generic, MaybeVerb) {
     var result = ParseArgsResult(Generic, MaybeVerb){
         .arena = std.heap.ArenaAllocator.init(allocator),
         .options = Generic{},
@@ -496,7 +496,7 @@ fn parseOption(
     arena: std.mem.Allocator,
     target_struct: *Spec,
     args: anytype,
-    error_handling: ErrorHandling,
+    comptime error_handling: ErrorHandling,
     last_error: *?anyerror,
     /// The name of the option that is currently parsed.
     comptime name: []const u8,
@@ -649,14 +649,18 @@ pub const ErrorHandling = union(enum) {
     /// `error.InvalidArguments` when any error was encountered.
     collect: *ErrorCollection,
 
+    /// Forwards the parsing error to a functionm
+    forward: fn (err: Error) anyerror!void,
+
     /// Processes an error with the given handling method.
-    fn process(self: Self, src_error: anytype, err: Error) !void {
+    fn process(comptime self: Self, src_error: anytype, err: Error) !void {
         if (@typeInfo(@TypeOf(src_error)) != .ErrorSet)
             @compileError("src_error must be a error union!");
         switch (self) {
             .silent => return src_error,
             .print => try std.io.getStdErr().writer().print("{}\n", .{err}),
             .collect => |collection| try collection.insert(err),
+            .forward => |func| try func(err),
         }
     }
 };
