@@ -416,7 +416,7 @@ fn parseInt(comptime T: type, str: []const u8) !T {
                 if (comptime std.math.maxInt(T) < 1024)
                     return error.Overflow;
                 var base: T = if (base1024) 1024 else 1000;
-                multiplier = try std.math.powi(T, base, @intCast(T, pow));
+                multiplier = try std.math.powi(T, base, @as(T, @intCast(pow)));
             }
         }
     }
