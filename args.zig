@@ -969,10 +969,10 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
         @compileError("Missing meta declaration in Generic");
     }
 
-    try writer.print("{s} ", .{name});
+    try writer.print("{s}", .{name});
 
     if (@hasField(@TypeOf(Generic.meta), "summary")) {
-        try writer.print("{s}", .{Generic.meta.summary});
+        try writer.print(" {s}", .{Generic.meta.summary});
     }
     try writer.print("\n\n", .{});
 
@@ -1018,4 +1018,79 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
 
 
     }
+}
+
+test "full help" {
+    const Options = struct {
+        boolflag: bool = false,
+        stringflag: []const u8 = "hello",
+
+        pub const shorthands = .{
+            .b = "boolflag",
+        };
+
+        pub const meta = .{
+            .full_text = "testing tool",
+            .summary = "[--boolflag] [--stringflag]",
+            .option_docs = .{
+                .boolflag = "a boolean flag",
+                .stringflag = "a string flag",
+            }
+        };
+    };
+
+    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    defer test_buffer.deinit();
+
+    try printHelp(Options, "test", test_buffer.writer());
+
+    const expected =
+    \\test [--boolflag] [--stringflag]
+    \\
+    \\testing tool
+    \\
+    \\Options:
+    \\  -b,   boolflag:   a boolean flag
+    \\      stringflag:   a string flag
+    \\
+    ;
+
+    try std.testing.expectEqualStrings(expected, test_buffer.items);
+}
+
+test "help with no summary" {
+    const Options = struct {
+        boolflag: bool = false,
+        stringflag: []const u8 = "hello",
+
+        pub const shorthands = .{
+            .b = "boolflag",
+        };
+
+        pub const meta = .{
+            .full_text = "testing tool",
+            .option_docs = .{
+                .boolflag = "a boolean flag",
+                .stringflag = "a string flag",
+            }
+        };
+    };
+
+    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    defer test_buffer.deinit();
+
+    try printHelp(Options, "test", test_buffer.writer());
+
+    const expected =
+    \\test
+    \\
+    \\testing tool
+    \\
+    \\Options:
+    \\  -b,   boolflag:   a boolean flag
+    \\      stringflag:   a string flag
+    \\
+    ;
+
+    try std.testing.expectEqualStrings(expected, test_buffer.items);
 }
