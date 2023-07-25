@@ -959,3 +959,66 @@ test "index of raw indicator --" {
     try std.testing.expectEqual(args.raw_start_index, 2);
     try std.testing.expectEqual(args.positionals.len, 5);
 }
+
+fn reserved_argument(arg: [] const u8) bool {
+    return std.mem.eql(u8, arg, "shorthands") or std.mem.eql(u8, arg, "meta");
+}
+
+pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !void {
+    if (!@hasDecl(Generic, "meta")) {
+        @compileError("Missing meta declaration in Generic");
+    }
+
+    try writer.print("{s} ", .{name});
+
+    if (@hasField(@TypeOf(Generic.meta), "summary")) {
+        try writer.print("{s}\n", .{Generic.meta.summary});
+    } else {
+        try writer.print("\n", .{});
+    }
+
+    if (@hasField(@TypeOf(Generic.meta), "full_text")) {
+        try writer.print("{s}\n\n", .{Generic.meta.full_text});
+    } else {
+        try writer.print("\n", .{});
+    }
+
+    if (@hasField(@TypeOf(Generic.meta), "option_docs")) {
+        const fields = std.meta.fields(Generic);
+
+        try writer.print("Options:\n", .{});
+        comptime var maxOptionLength:comptime_int = 0;
+        inline for (fields) |field| {
+            if (!reserved_argument(field.name)) {
+                if (!@hasField(@TypeOf(Generic.meta.option_docs), field.name)) {
+                    @compileError("option_docs not specified for field: " ++ field.name);
+                }
+            }
+
+            if (field.name.len > maxOptionLength) {
+                maxOptionLength = field.name.len;
+            }
+        }
+
+        inline for (fields) |field| {
+            if (!reserved_argument(field.name)) {
+                if (@hasDecl(Generic, "shorthands")) {
+                    var foundShorthand = false;
+                    inline for (std.meta.fields(@TypeOf(Generic.shorthands))) |shorthand| {
+                        const option = @field(Generic.shorthands, shorthand.name);
+                        if (std.mem.eql(u8, option, field.name)) {
+                            try writer.print("  -{s}, ", .{shorthand.name});
+                            foundShorthand = true;
+                        }
+                    }
+                    if (!foundShorthand)
+                        try writer.print("      ", .{});
+                }
+                const fmtString = std.fmt.comptimePrint("{{s: >{}}}:   {{s}}\n", .{maxOptionLength});
+                try writer.print(fmtString, .{field.name, @field(Generic.meta.option_docs, field.name)});
+            }
+        }
+
+
+    }
+}
