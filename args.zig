@@ -972,15 +972,12 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
     try writer.print("{s} ", .{name});
 
     if (@hasField(@TypeOf(Generic.meta), "summary")) {
-        try writer.print("{s}\n", .{Generic.meta.summary});
-    } else {
-        try writer.print("\n", .{});
+        try writer.print("{s}", .{Generic.meta.summary});
     }
+    try writer.print("\n\n", .{});
 
     if (@hasField(@TypeOf(Generic.meta), "full_text")) {
         try writer.print("{s}\n\n", .{Generic.meta.full_text});
-    } else {
-        try writer.print("\n", .{});
     }
 
     if (@hasField(@TypeOf(Generic.meta), "option_docs")) {
