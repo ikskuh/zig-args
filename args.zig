@@ -984,7 +984,7 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
         const fields = std.meta.fields(Generic);
 
         try writer.print("Options:\n", .{});
-        comptime var maxOptionLength:comptime_int = 0;
+        comptime var maxOptionLength = 0;
         inline for (fields) |field| {
             if (!reserved_argument(field.name)) {
                 if (!@hasField(@TypeOf(Generic.meta.option_docs), field.name)) {

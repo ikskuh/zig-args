@@ -4,7 +4,7 @@ const argsParser = @import("args");
 pub fn main() !u8 {
     var argsAllocator = std.heap.page_allocator;
 
-    const options = argsParser.parseForCurrentProcess(struct {
+    const Options = struct {
         // This declares long options for double hyphen
         output: ?[]const u8 = null,
         @"with-offset": bool = false,
@@ -14,6 +14,7 @@ pub fn main() !u8 {
         signed_number: ?i64 = null,
         unsigned_number: ?u64 = null,
         mode: enum { default, special, slow, fast } = .default,
+        help: bool = false,
 
         // This declares short-hand options for single hyphen
         pub const shorthands = .{
@@ -22,7 +23,23 @@ pub fn main() !u8 {
             .O = "with-offset",
             .o = "output",
         };
-    }, argsAllocator, .print) catch return 1;
+
+        pub const meta = .{
+            .option_docs = .{
+                .output= "output help",
+                .@"with-offset" = "with-offset help",
+                .@"with-hexdump" = "with-hexdump help",
+                .@"intermix-source" = "intermix-source",
+                .numberOfBytes = "numberOfBytes help",
+                .signed_number = "signed_number help",
+                .unsigned_number = "unsigned_number help",
+                .mode = "mode help",
+                .help = "help help",
+            }
+        };
+    };
+
+    const options = argsParser.parseForCurrentProcess(Options, argsAllocator, .print) catch return 1;
     defer options.deinit();
 
     std.debug.print("executable name: {?s}\n", .{options.executable_name});
@@ -40,5 +57,6 @@ pub fn main() !u8 {
         std.debug.print("\t'{s}'\n", .{arg});
     }
 
+    try argsParser.printHelp(Options, "demo.zig", std.io.getStdOut().writer());
     return 0;
 }
