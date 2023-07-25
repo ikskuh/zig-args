@@ -964,23 +964,27 @@ fn reserved_argument(arg: [] const u8) bool {
     return std.mem.eql(u8, arg, "shorthands") or std.mem.eql(u8, arg, "meta");
 }
 
-pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !void {
+pub fn printHelp(comptime Generic: type, writer: anytype) !void {
     if (!@hasDecl(Generic, "meta")) {
         @compileError("Missing meta declaration in Generic");
     }
 
-    try writer.print("{s}", .{name});
+    const Meta = @TypeOf(Generic.meta);
 
-    if (@hasField(@TypeOf(Generic.meta), "summary")) {
+    if (@hasField(Meta, "name")) {
+        try writer.print("{s}", .{Generic.meta.name});
+    }
+
+    if (@hasField(Meta, "summary")) {
         try writer.print(" {s}", .{Generic.meta.summary});
     }
     try writer.print("\n\n", .{});
 
-    if (@hasField(@TypeOf(Generic.meta), "full_text")) {
+    if (@hasField(Meta, "full_text")) {
         try writer.print("{s}\n\n", .{Generic.meta.full_text});
     }
 
-    if (@hasField(@TypeOf(Generic.meta), "option_docs")) {
+    if (@hasField(Meta, "option_docs")) {
         const fields = std.meta.fields(Generic);
 
         try writer.print("Options:\n", .{});
@@ -1011,7 +1015,7 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
                     if (!foundShorthand)
                         try writer.print("      ", .{});
                 }
-                const fmtString = std.fmt.comptimePrint("{{s: >{}}}:   {{s}}\n", .{maxOptionLength});
+                const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}\n", .{maxOptionLength});
                 try writer.print(fmtString, .{field.name, @field(Generic.meta.option_docs, field.name)});
             }
         }
@@ -1030,6 +1034,7 @@ test "full help" {
         };
 
         pub const meta = .{
+            .name = "test",
             .full_text = "testing tool",
             .summary = "[--boolflag] [--stringflag]",
             .option_docs = .{
@@ -1042,7 +1047,7 @@ test "full help" {
     var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    try printHelp(Options, "test", test_buffer.writer());
+    try printHelp(Options, test_buffer.writer());
 
     const expected =
     \\test [--boolflag] [--stringflag]
@@ -1050,15 +1055,15 @@ test "full help" {
     \\testing tool
     \\
     \\Options:
-    \\  -b,   boolflag:   a boolean flag
-    \\      stringflag:   a string flag
+    \\  -b, --boolflag     a boolean flag
+    \\      --stringflag   a string flag
     \\
     ;
 
     try std.testing.expectEqualStrings(expected, test_buffer.items);
 }
 
-test "help with no summary" {
+test "help with no summary or name" {
     const Options = struct {
         boolflag: bool = false,
         stringflag: []const u8 = "hello",
@@ -1079,16 +1084,16 @@ test "help with no summary" {
     var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    try printHelp(Options, "test", test_buffer.writer());
+    try printHelp(Options, test_buffer.writer());
 
     const expected =
-    \\test
+    \\
     \\
     \\testing tool
     \\
     \\Options:
-    \\  -b,   boolflag:   a boolean flag
-    \\      stringflag:   a string flag
+    \\  -b, --boolflag     a boolean flag
+    \\      --stringflag   a string flag
     \\
     ;
 
