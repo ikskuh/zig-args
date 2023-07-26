@@ -25,7 +25,6 @@ pub fn main() !u8 {
         };
 
         pub const meta = .{
-            .name = "demo.zig",
             .option_docs = .{
                 .output= "output help",
                 .@"with-offset" = "with-offset help",
@@ -58,6 +57,6 @@ pub fn main() !u8 {
         std.debug.print("\t'{s}'\n", .{arg});
     }
 
-    try argsParser.printHelp(Options, std.io.getStdOut().writer());
+    try argsParser.printHelp(Options, "demo.zig", std.io.getStdOut().writer());
     return 0;
 }

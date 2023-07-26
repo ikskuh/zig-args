@@ -964,16 +964,14 @@ fn reserved_argument(arg: [] const u8) bool {
     return std.mem.eql(u8, arg, "shorthands") or std.mem.eql(u8, arg, "meta");
 }
 
-pub fn printHelp(comptime Generic: type, writer: anytype) !void {
+pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !void {
     if (!@hasDecl(Generic, "meta")) {
         @compileError("Missing meta declaration in Generic");
     }
 
     const Meta = @TypeOf(Generic.meta);
 
-    if (@hasField(Meta, "name")) {
-        try writer.print("{s}", .{Generic.meta.name});
-    }
+    try writer.print("{s}", .{name});
 
     if (@hasField(Meta, "summary")) {
         try writer.print(" {s}", .{Generic.meta.summary});
@@ -1047,7 +1045,7 @@ test "full help" {
     var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    try printHelp(Options, test_buffer.writer());
+    try printHelp(Options, "test", test_buffer.writer());
 
     const expected =
     \\test [--boolflag] [--stringflag]
@@ -1063,7 +1061,7 @@ test "full help" {
     try std.testing.expectEqualStrings(expected, test_buffer.items);
 }
 
-test "help with no summary or name" {
+test "help with no summary" {
     const Options = struct {
         boolflag: bool = false,
         stringflag: []const u8 = "hello",
@@ -1084,10 +1082,10 @@ test "help with no summary or name" {
     var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    try printHelp(Options, test_buffer.writer());
+    try printHelp(Options, "test", test_buffer.writer());
 
     const expected =
-    \\
+    \\test
     \\
     \\testing tool
     \\
