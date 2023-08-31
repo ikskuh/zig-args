@@ -973,8 +973,8 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
 
     try writer.print("Usage: {s}", .{name});
 
-    if (@hasField(Meta, "summary")) {
-        try writer.print(" {s}", .{Generic.meta.summary});
+    if (@hasField(Meta, "usage_summary")) {
+        try writer.print(" {s}", .{Generic.meta.usage_summary});
     }
     try writer.print("\n\n", .{});
 
@@ -1034,7 +1034,7 @@ test "full help" {
         pub const meta = .{
             .name = "test",
             .full_text = "testing tool",
-            .summary = "[--boolflag] [--stringflag]",
+            .usage_summary = "[--boolflag] [--stringflag]",
             .option_docs = .{
                 .boolflag = "a boolean flag",
                 .stringflag = "a string flag",
@@ -1061,7 +1061,7 @@ test "full help" {
     try std.testing.expectEqualStrings(expected, test_buffer.items);
 }
 
-test "help with no summary" {
+test "help with no usage summary" {
     const Options = struct {
         boolflag: bool = false,
         stringflag: []const u8 = "hello",
