@@ -971,7 +971,7 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
 
     const Meta = @TypeOf(Generic.meta);
 
-    try writer.print("{s}", .{name});
+    try writer.print("Usage: {s}", .{name});
 
     if (@hasField(Meta, "summary")) {
         try writer.print(" {s}", .{Generic.meta.summary});
@@ -1048,7 +1048,7 @@ test "full help" {
     try printHelp(Options, "test", test_buffer.writer());
 
     const expected =
-    \\test [--boolflag] [--stringflag]
+    \\Usage: test [--boolflag] [--stringflag]
     \\
     \\testing tool
     \\
@@ -1085,7 +1085,7 @@ test "help with no summary" {
     try printHelp(Options, "test", test_buffer.writer());
 
     const expected =
-    \\test
+    \\Usage: test
     \\
     \\testing tool
     \\
