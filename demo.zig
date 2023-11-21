@@ -2,7 +2,7 @@ const std = @import("std");
 const argsParser = @import("args");
 
 pub fn main() !u8 {
-    var argsAllocator = std.heap.page_allocator;
+    const argsAllocator = std.heap.page_allocator;
 
     const Options = struct {
         // This declares long options for double hyphen
