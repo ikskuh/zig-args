@@ -1,0 +1,12 @@
+.{
+    .name = "zig_args",
+    .version = "0.1.0",
+
+    // .minimum_zig_version = "0.12.0",
+
+    .dependencies = .{},
+
+    .paths = .{
+        "",
+    },
+}
