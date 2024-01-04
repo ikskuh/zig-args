@@ -1,10 +1,12 @@
 const std = @import("std");
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
 
-    const args_mod = b.addModule("args", .{ .source_file = .{ .path = "args.zig" } });
+    const args_mod = b.addModule("args", .{
+        .root_source_file = .{ .path = "args.zig" },
+    });
 
     const test_runner = b.addTest(.{
         .root_source_file = .{ .path = "args.zig" },
@@ -20,7 +22,7 @@ pub fn build(b: *std.build.Builder) void {
         .optimize = optimize,
         .target = target,
     });
-    demo_exe.addModule("args", args_mod);
+    demo_exe.root_module.addImport("args", args_mod);
 
     const run_demo = b.addRunArtifact(demo_exe);
     run_demo.addArgs(&[_][]const u8{
@@ -35,7 +37,7 @@ pub fn build(b: *std.build.Builder) void {
         .optimize = optimize,
         .target = target,
     });
-    demo_verb_exe.addModule("args", args_mod);
+    demo_verb_exe.root_module.addImport("args", args_mod);
 
     const run_demo_verb_1 = b.addRunArtifact(demo_verb_exe);
     run_demo_verb_1.addArgs(&[_][]const u8{
