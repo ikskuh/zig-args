@@ -26,7 +26,7 @@ pub fn main() !u8 {
 
         pub const meta = .{
             .option_docs = .{
-                .output= "output help",
+                .output = "output help",
                 .@"with-offset" = "with-offset help",
                 .@"with-hexdump" = "with-hexdump help",
                 .@"intermix-source" = "intermix-source",
@@ -35,7 +35,7 @@ pub fn main() !u8 {
                 .unsigned_number = "unsigned_number help",
                 .mode = "mode help",
                 .help = "help help",
-            }
+            },
         };
     };
 

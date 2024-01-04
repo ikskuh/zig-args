@@ -960,7 +960,7 @@ test "index of raw indicator --" {
     try std.testing.expectEqual(args.positionals.len, 5);
 }
 
-fn reserved_argument(arg: [] const u8) bool {
+fn reserved_argument(arg: []const u8) bool {
     return std.mem.eql(u8, arg, "shorthands") or std.mem.eql(u8, arg, "meta");
 }
 
@@ -1014,11 +1014,9 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
                         try writer.print("      ", .{});
                 }
                 const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}\n", .{maxOptionLength});
-                try writer.print(fmtString, .{field.name, @field(Generic.meta.option_docs, field.name)});
+                try writer.print(fmtString, .{ field.name, @field(Generic.meta.option_docs, field.name) });
             }
         }
-
-
     }
 }
 
@@ -1038,7 +1036,7 @@ test "full help" {
             .option_docs = .{
                 .boolflag = "a boolean flag",
                 .stringflag = "a string flag",
-            }
+            },
         };
     };
 
@@ -1048,14 +1046,14 @@ test "full help" {
     try printHelp(Options, "test", test_buffer.writer());
 
     const expected =
-    \\Usage: test [--boolflag] [--stringflag]
-    \\
-    \\testing tool
-    \\
-    \\Options:
-    \\  -b, --boolflag     a boolean flag
-    \\      --stringflag   a string flag
-    \\
+        \\Usage: test [--boolflag] [--stringflag]
+        \\
+        \\testing tool
+        \\
+        \\Options:
+        \\  -b, --boolflag     a boolean flag
+        \\      --stringflag   a string flag
+        \\
     ;
 
     try std.testing.expectEqualStrings(expected, test_buffer.items);
@@ -1075,7 +1073,7 @@ test "help with no usage summary" {
             .option_docs = .{
                 .boolflag = "a boolean flag",
                 .stringflag = "a string flag",
-            }
+            },
         };
     };
 
@@ -1085,14 +1083,14 @@ test "help with no usage summary" {
     try printHelp(Options, "test", test_buffer.writer());
 
     const expected =
-    \\Usage: test
-    \\
-    \\testing tool
-    \\
-    \\Options:
-    \\  -b, --boolflag     a boolean flag
-    \\      --stringflag   a string flag
-    \\
+        \\Usage: test
+        \\
+        \\testing tool
+        \\
+        \\Options:
+        \\  -b, --boolflag     a boolean flag
+        \\      --stringflag   a string flag
+        \\
     ;
 
     try std.testing.expectEqualStrings(expected, test_buffer.items);
