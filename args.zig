@@ -475,7 +475,7 @@ fn convertArgumentValue(comptime T: type, allocator: std.mem.Allocator, textInpu
                 // This is equivalent to allocator.dupeZ but works with any sentinel.
                 if (comptime std.meta.sentinel(T)) |sentinel| {
                     const data = try allocator.alloc(u8, textInput.len + 1);
-                    std.mem.copy(u8, data, textInput);
+                    @memcpy(data[0..textInput.len], textInput);
                     data[textInput.len] = sentinel;
 
                     return data[0..textInput.len :sentinel];
