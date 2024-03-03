@@ -41,7 +41,7 @@ const options = argsParser.parseForCurrentProcess(struct {
 }, argsAllocator, .print) catch return 1;
 defer options.deinit();
 
-std.debug.print("executable name: {s}\n", .{options.executable_name});
+std.debug.print("executable name: {?s}\n", .{options.executable_name});
 
 std.debug.print("parsed options:\n", .{});
 inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
