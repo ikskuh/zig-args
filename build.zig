@@ -8,11 +8,13 @@ pub fn build(b: *std.Build) void {
         .root_source_file = .{ .path = "args.zig" },
     });
 
-    const test_runner = b.addTest(.{
+    const main_tests = b.addTest(.{
         .root_source_file = .{ .path = "args.zig" },
         .optimize = optimize,
         .target = target,
     });
+
+    const run_main_tests = b.addRunArtifact(main_tests);
 
     // Standard demo
 
@@ -57,7 +59,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const test_step = b.step("test", "Runs the test suite.");
-    test_step.dependOn(&test_runner.step);
+    test_step.dependOn(&run_main_tests.step);
     test_step.dependOn(&run_demo.step);
     test_step.dependOn(&run_demo_verb_1.step);
     test_step.dependOn(&run_demo_verb_2.step);

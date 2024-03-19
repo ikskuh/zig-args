@@ -1013,8 +1013,35 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
                     if (!foundShorthand)
                         try writer.print("      ", .{});
                 }
-                const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}\n", .{maxOptionLength});
-                try writer.print(fmtString, .{ field.name, @field(Generic.meta.option_docs, field.name) });
+                if (@hasDecl(Generic, "wrap_len")) {
+                    var it = std.mem.split(u8, @field(Generic.meta.option_docs, field.name), " ");
+                    const threshold = Generic.wrap_len;
+                    var line_len: usize = 0;
+                    var newline = false;
+                    var first = true;
+                    while (it.next()) |word| {
+                        if (first) {
+                            const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}", .{maxOptionLength});
+                            try writer.print(fmtString, .{ field.name, word });
+                            first = false;
+                        } else if (newline) {
+                            const fmtString = std.fmt.comptimePrint("\n{{s: <{}}} {{s}}", .{maxOptionLength + 10});
+                            try writer.print(fmtString, .{ " ", word });
+                            newline = false;
+                        } else {
+                            try writer.print(" {s}", .{word});
+                        }
+                        line_len += word.len;
+                        if (line_len >= threshold) {
+                            newline = true;
+                            line_len = 0;
+                        }
+                    }
+                    try writer.writeByte('\n');
+                } else {
+                    const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}\n", .{maxOptionLength});
+                    try writer.print(fmtString, .{ field.name, @field(Generic.meta.option_docs, field.name) });
+                }
             }
         }
     }
@@ -1090,6 +1117,51 @@ test "help with no usage summary" {
         \\Options:
         \\  -b, --boolflag     a boolean flag
         \\      --stringflag   a string flag
+        \\
+    ;
+
+    try std.testing.expectEqualStrings(expected, test_buffer.items);
+}
+
+test "help with wrapping" {
+    const Options = struct {
+        boolflag: bool = false,
+        stringflag: []const u8 = "hello",
+
+        pub const shorthands = .{
+            .b = "boolflag",
+        };
+
+        pub const wrap_len = 10;
+
+        pub const meta = .{
+            .full_text = "testing tool",
+            .option_docs = .{
+                .boolflag = "a boolean flag with a pretty long description about booleans",
+                .stringflag = "a string flag with another long description about strings",
+            },
+        };
+    };
+
+    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    defer test_buffer.deinit();
+
+    try printHelp(Options, "test", test_buffer.writer());
+
+    const expected =
+        \\Usage: test
+        \\
+        \\testing tool
+        \\
+        \\Options:
+        \\  -b, --boolflag     a boolean flag
+        \\                     with a pretty
+        \\                     long description
+        \\                     about booleans
+        \\      --stringflag   a string flag
+        \\                     with another
+        \\                     long description
+        \\                     about strings
         \\
     ;
 
