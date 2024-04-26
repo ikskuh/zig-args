@@ -373,13 +373,18 @@ fn requiresArg(comptime T: type) bool {
 
 /// Parses a boolean option.
 fn parseBoolean(str: []const u8) !bool {
-    const map = std.ComptimeStringMap(bool, .{
-        .{ "yes", true },    .{ "y", true },
-        .{ "true", true },   .{ "t", true },
-        .{ "no", false },    .{ "n", false },
-        .{ "false", false }, .{ "f", false },
-    });
-    return map.get(str) orelse error.NotABooleanValue;
+    return switch (str.len) {
+        1 => switch (str[0]) {
+            'y', 'Y', 't', 'T' => true,
+            'n', 'N', 'f', 'F' => false,
+            else => error.NotABooleanValue,
+        },
+        2 => if (std.ascii.eqlIgnoreCase("no", str)) false else error.NotABooleanValue,
+        3 => if (std.ascii.eqlIgnoreCase("yes", str)) true else error.NotABooleanValue,
+        4 => if (std.ascii.eqlIgnoreCase("true", str)) true else error.NotABooleanValue,
+        5 => if (std.ascii.eqlIgnoreCase("false", str)) false else error.NotABooleanValue,
+        else => error.NotABooleanValue,
+    };
 }
 
 /// Parses an int option.
