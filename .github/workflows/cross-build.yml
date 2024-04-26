@@ -22,7 +22,7 @@ jobs:
       - name: Setup Zig
         uses: goto-bus-stop/setup-zig@v1
         with:
-          version: master
+          version: 0.12.0
 
       - name: Run the test suite
         run: |
