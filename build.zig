@@ -5,11 +5,11 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
 
     const args_mod = b.addModule("args", .{
-        .root_source_file = .{ .path = "args.zig" },
+        .root_source_file = b.path("args.zig"),
     });
 
     const main_tests = b.addTest(.{
-        .root_source_file = .{ .path = "args.zig" },
+        .root_source_file = b.path("args.zig"),
         .optimize = optimize,
         .target = target,
     });
@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
 
     const demo_exe = b.addExecutable(.{
         .name = "demo",
-        .root_source_file = .{ .path = "demo.zig" },
+        .root_source_file = b.path("demo.zig"),
         .optimize = optimize,
         .target = target,
     });
@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) void {
 
     const demo_verb_exe = b.addExecutable(.{
         .name = "demo_verb",
-        .root_source_file = .{ .path = "demo_verb.zig" },
+        .root_source_file = b.path("demo_verb.zig"),
         .optimize = optimize,
         .target = target,
     });
