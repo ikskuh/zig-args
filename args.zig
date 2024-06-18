@@ -1012,7 +1012,7 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !voi
                         try writer.print("      ", .{});
                 }
                 if (@hasDecl(Generic, "wrap_len")) {
-                    var it = std.mem.split(u8, @field(Generic.meta.option_docs, field.name), " ");
+                    var it = std.mem.splitScalar(u8, @field(Generic.meta.option_docs, field.name), ' ');
                     const threshold = Generic.wrap_len;
                     var line_len: usize = 0;
                     var newline = false;
