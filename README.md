@@ -17,6 +17,23 @@ Simple-to-use argument parser with struct-based config
     - Strings
     - Enumerations
 
+## Use in your project
+
+Add the dependency in your `build.zig.zon` by running the following command:
+```bash
+zig fetch --save=args git+https://github.com/ikskuh/zig-args#master
+```
+
+Add it to your exe in `build.zig`:
+```zig
+exe.root_module.addImport("args", b.dependency("args", .{ .target = target, .optimize = optimize }).module("args"));
+```
+
+Then you can import it from your code:
+```zig
+const argsParser = @import("args");
+```
+
 ## Example
 
 ```zig
