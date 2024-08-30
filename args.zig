@@ -294,19 +294,19 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
 fn canHaveFieldsAndIsNotZeroSized(comptime T: type) bool {
     return switch (@typeInfo(T)) {
-        .Struct, .Union, .Enum, .ErrorSet => @sizeOf(T) != 0,
+        .@"struct", .@"union", .@"enum", .error_set => @sizeOf(T) != 0,
         else => false,
     };
 }
 
 /// The return type of the argument parser.
 pub fn ParseArgsResult(comptime Generic: type, comptime MaybeVerb: ?type) type {
-    if (@typeInfo(Generic) != .Struct)
+    if (@typeInfo(Generic) != .@"struct")
         @compileError("Generic argument definition must be a struct");
 
     if (MaybeVerb) |Verb| {
         const ti: std.builtin.Type = @typeInfo(Verb);
-        if (ti != .Union or ti.Union.tag_type == null)
+        if (ti != .@"union" or ti.@"union".tag_type == null)
             @compileError("Verb must be a tagged union");
     }
 
@@ -354,18 +354,18 @@ fn requiresArg(comptime T: type) bool {
                 return true;
 
             return switch (@as(std.builtin.TypeId, @typeInfo(Type))) {
-                .Int, .Float, .Enum => true,
-                .Bool => false,
-                .Struct, .Union => true,
-                .Pointer => true,
+                .int, .float, .@"enum" => true,
+                .bool => false,
+                .@"struct", .@"union" => true,
+                .pointer => true,
                 else => @compileError(@typeName(Type) ++ " is not a supported argument type!"),
             };
         }
     };
 
     const ti = @typeInfo(T);
-    if (ti == .Optional) {
-        return H.doesArgTypeRequireArg(ti.Optional.child);
+    if (ti == .optional) {
+        return H.doesArgTypeRequireArg(ti.optional.child);
     } else {
         return H.doesArgTypeRequireArg(T);
     }
@@ -419,7 +419,7 @@ fn parseInt(comptime T: type, str: []const u8) !T {
         }
     }
 
-    const ret: T = switch (@typeInfo(T).Int.signedness) {
+    const ret: T = switch (@typeInfo(T).int.signedness) {
         .signed => try std.fmt.parseInt(T, buf, 0),
         .unsigned => try std.fmt.parseUnsigned(T, buf, 0),
     };
@@ -442,28 +442,28 @@ test "parseInt" {
 /// Converts an argument value to the target type.
 fn convertArgumentValue(comptime T: type, allocator: std.mem.Allocator, textInput: []const u8) !T {
     switch (@typeInfo(T)) {
-        .Optional => |opt| return try convertArgumentValue(opt.child, allocator, textInput),
-        .Bool => if (textInput.len > 0)
+        .optional => |opt| return try convertArgumentValue(opt.child, allocator, textInput),
+        .bool => if (textInput.len > 0)
             return try parseBoolean(textInput)
         else
             return true, // boolean options are always true
-        .Int => return try parseInt(T, textInput),
-        .Float => return try std.fmt.parseFloat(T, textInput),
-        .Enum => {
+        .int => return try parseInt(T, textInput),
+        .float => return try std.fmt.parseFloat(T, textInput),
+        .@"enum" => {
             if (@hasDecl(T, "parse")) {
                 return try T.parse(textInput);
             } else {
                 return std.meta.stringToEnum(T, textInput) orelse return error.InvalidEnumeration;
             }
         },
-        .Struct, .Union => {
+        .@"struct", .@"union" => {
             if (@hasDecl(T, "parse")) {
                 return try T.parse(textInput);
             } else {
                 @compileError(@typeName(T) ++ " has no public visible `fn parse([]const u8) !T`!");
             }
         },
-        .Pointer => |ptr| switch (ptr.size) {
+        .pointer => |ptr| switch (ptr.size) {
             .Slice => {
                 if (ptr.child != u8) {
                     @compileError(@typeName(T) ++ " is not a supported pointer type, only slices of u8 are supported");
@@ -652,7 +652,7 @@ pub const ErrorHandling = union(enum) {
 
     /// Processes an error with the given handling method.
     fn process(comptime self: Self, src_error: anytype, err: Error) !void {
-        if (@typeInfo(@TypeOf(src_error)) != .ErrorSet)
+        if (@typeInfo(@TypeOf(src_error)) != .error_set)
             @compileError("src_error must be a error union!");
         switch (self) {
             .silent => return src_error,
