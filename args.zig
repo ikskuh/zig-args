@@ -281,6 +281,11 @@ fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterato
 
     if (last_error != null)
         return error.InvalidArguments;
+    switch (error_handling) {
+        .collect => |c| if (c.errors().len > 0)
+            return error.InvalidArguments,
+        else => {},
+    }
 
     // This will consume the rest of the arguments as positional ones.
     // Only executes when the above loop is broken.
@@ -427,7 +432,7 @@ fn parseInt(comptime T: type, str: []const u8) !T {
     return try std.math.mul(T, ret, multiplier);
 }
 
-test "parseInt" {
+test parseInt {
     const tst = std.testing;
 
     try tst.expectEqual(@as(i32, 50), try parseInt(i32, "50"));
@@ -667,11 +672,12 @@ test {
     std.testing.refAllDecls(@This());
 }
 
-test "ErrorCollection" {
+var ec: ErrorCollection = undefined;
+test ErrorCollection {
     var option_buf = "option".*;
     var invalid_buf = "invalid".*;
 
-    var ec = ErrorCollection.init(std.testing.allocator);
+    ec = ErrorCollection.init(std.testing.allocator);
     defer ec.deinit();
 
     try ec.insert(Error{
@@ -855,6 +861,43 @@ test "basic parsing (with verbs)" {
 
     try std.testing.expectEqual(true, booze.cocktail);
     try std.testing.expectEqual(false, booze.longdrink);
+}
+
+test "basic error handling (with verbs)" {
+    {
+        var titerator = TestIterator.init(&[_][:0]const u8{
+            "foobar", // Invalid verb
+        });
+        const args = parseInternal(
+            TestGenericOptions,
+            TestVerb,
+            &titerator,
+            std.testing.allocator,
+            .silent,
+        );
+        try std.testing.expectError(error.EncounteredUnknownVerb, args);
+    }
+
+    {
+        ec = ErrorCollection.init(std.testing.allocator);
+        defer ec.deinit();
+        var titerator = TestIterator.init(&[_][:0]const u8{
+            "foobar", // Invalid verb
+        });
+        const args = parseInternal(
+            TestGenericOptions,
+            TestVerb,
+            &titerator,
+            std.testing.allocator,
+            .{ .collect = &ec },
+        );
+        try std.testing.expectEqual(1, ec.errors().len);
+        try std.testing.expectEqual(
+            Error.Kind.unknown_verb,
+            ec.errors()[0].kind,
+        );
+        try std.testing.expectError(error.InvalidArguments, args);
+    }
 }
 
 test "shorthand parsing (with verbs)" {
