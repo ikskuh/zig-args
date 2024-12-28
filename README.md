@@ -73,3 +73,9 @@ for (options.positionals) |arg| {
     std.debug.print("\t'{s}'\n", .{arg});
 }
 ```
+
+## Versions
+
+- Branch [master](https://github.com/ikskuh/zig-args/tree/master) tracks Zig master
+- Branch [0.13.x](https://github.com/ikskuh/zig-args/tree/zig-0.13.x) tracks Zig 0.13.0
+- Tag [0.9.0](https://github.com/ikskuh/zig-args/tree/zig-0.9.0) tracks Zig 0.9.0
