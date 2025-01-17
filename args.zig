@@ -469,7 +469,7 @@ fn convertArgumentValue(comptime T: type, allocator: std.mem.Allocator, textInpu
             }
         },
         .pointer => |ptr| switch (ptr.size) {
-            .Slice => {
+            .slice => {
                 if (ptr.child != u8) {
                     @compileError(@typeName(T) ++ " is not a supported pointer type, only slices of u8 are supported");
                 }
