@@ -1,6 +1,7 @@
 .{
-    .name = "zig-args",
+    .name = .args,
     .version = "0.0.0",
+    .fingerprint = 0x161b2ea2a38c85bc,
     .minimum_zig_version = "0.14.0-dev.2801+4d8c24c6c",
 
     .paths = .{
