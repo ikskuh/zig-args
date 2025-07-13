@@ -57,6 +57,8 @@ pub fn main() !u8 {
         std.debug.print("\t'{s}'\n", .{arg});
     }
 
-    try argsParser.printHelp(Options, options.executable_name orelse "demo", std.io.getStdOut().writer());
+    var writer_buf: [2]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&writer_buf);
+    try argsParser.printHelp(Options, options.executable_name orelse "demo", &stdout.interface);
     return 0;
 }

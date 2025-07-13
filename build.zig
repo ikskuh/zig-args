@@ -6,23 +6,30 @@ pub fn build(b: *std.Build) void {
 
     const args_mod = b.addModule("args", .{
         .root_source_file = b.path("args.zig"),
-    });
-
-    const main_tests = b.addTest(.{
-        .root_source_file = b.path("args.zig"),
         .optimize = optimize,
         .target = target,
     });
 
+    const main_tests = b.addTest(.{
+        .root_module = args_mod,
+        // Works around compiler crash in current Zig master x86_64 backend
+        // https://github.com/ziglang/zig/issues/24364
+        .use_llvm = true,
+    });
     const run_main_tests = b.addRunArtifact(main_tests);
 
     // Standard demo
 
     const demo_exe = b.addExecutable(.{
         .name = "demo",
-        .root_source_file = b.path("demo.zig"),
-        .optimize = optimize,
-        .target = target,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("demo.zig"),
+            .optimize = optimize,
+            .target = target,
+        }),
+        // Works around compiler crash in current Zig master x86_64 backend
+        // https://github.com/ziglang/zig/issues/24364
+        .use_llvm = true,
     });
     demo_exe.root_module.addImport("args", args_mod);
 
@@ -35,9 +42,14 @@ pub fn build(b: *std.Build) void {
 
     const demo_verb_exe = b.addExecutable(.{
         .name = "demo_verb",
-        .root_source_file = b.path("demo_verb.zig"),
-        .optimize = optimize,
-        .target = target,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("demo_verb.zig"),
+            .optimize = optimize,
+            .target = target,
+        }),
+        // Works around compiler crash in current Zig master x86_64 backend
+        // https://github.com/ziglang/zig/issues/24364
+        .use_llvm = true,
     });
     demo_verb_exe.root_module.addImport("args", args_mod);
 
