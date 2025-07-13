@@ -63,7 +63,12 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
 /// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Generic, null) {
+pub fn parse(
+    comptime Generic: type,
+    args_iterator: anytype,
+    allocator: std.mem.Allocator,
+    comptime error_handling: ErrorHandling,
+) !ParseArgsResult(Generic, null) {
     return parseInternal(Generic, null, args_iterator, allocator, error_handling);
 }
 
@@ -77,12 +82,24 @@ pub fn parse(comptime Generic: type, args_iterator: anytype, allocator: std.mem.
 /// - `error_handling` defines how parser errors will be handled.
 ///
 /// Note that `.executable_name` in the result will not be set!
-pub fn parseWithVerb(comptime Generic: type, comptime Verb: type, args_iterator: anytype, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Generic, Verb) {
+pub fn parseWithVerb(
+    comptime Generic: type,
+    comptime Verb: type,
+    args_iterator: anytype,
+    allocator: std.mem.Allocator,
+    comptime error_handling: ErrorHandling,
+) !ParseArgsResult(Generic, Verb) {
     return parseInternal(Generic, Verb, args_iterator, allocator, error_handling);
 }
 
 /// Same as parse, but with anytype argument for testability
-fn parseInternal(comptime Generic: type, comptime MaybeVerb: ?type, args_iterator: anytype, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Generic, MaybeVerb) {
+fn parseInternal(
+    comptime Generic: type,
+    comptime MaybeVerb: ?type,
+    args_iterator: anytype,
+    allocator: std.mem.Allocator,
+    comptime error_handling: ErrorHandling,
+) !ParseArgsResult(Generic, MaybeVerb) {
     var result = ParseArgsResult(Generic, MaybeVerb){
         .arena = std.heap.ArenaAllocator.init(allocator),
         .options = Generic{},
@@ -594,9 +611,7 @@ pub const Error = struct {
     /// The kind of error, might include additional information
     kind: Kind,
 
-    pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(self: Self, writer: *std.Io.Writer) !void {
         switch (self.kind) {
             .unknown => try writer.print("The option {s} does not exist", .{self.option}),
             .invalid_value => |value| try writer.print("Invalid value '{s}' for option {s}", .{ value, self.option }),
@@ -661,7 +676,11 @@ pub const ErrorHandling = union(enum) {
             @compileError("src_error must be a error union!");
         switch (self) {
             .silent => return src_error,
-            .print => try std.io.getStdErr().writer().print("{}\n", .{err}),
+            .print => {
+                var writer_buf: [2]u8 = undefined;
+                var stderr = std.fs.File.stderr().writer(&writer_buf);
+                try stderr.interface.print("{f}\n", .{err});
+            },
             .collect => |collection| try collection.insert(err),
             .forward => |func| try func(err),
         }
@@ -1005,7 +1024,7 @@ fn reserved_argument(arg: []const u8) bool {
     return std.mem.eql(u8, arg, "shorthands") or std.mem.eql(u8, arg, "meta");
 }
 
-pub fn printHelp(comptime Generic: type, name: []const u8, writer: anytype) !void {
+pub fn printHelp(comptime Generic: type, name: []const u8, writer: *std.Io.Writer) !void {
     if (!@hasDecl(Generic, "meta")) {
         @compileError("Missing meta declaration in Generic");
     }
@@ -1110,8 +1129,9 @@ test "full help" {
 
     var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
+    var new_writer = test_buffer.writer().adaptToNewApi();
 
-    try printHelp(Options, "test", test_buffer.writer());
+    try printHelp(Options, "test", &new_writer.new_interface);
 
     const expected =
         \\Usage: test [--boolflag] [--stringflag]
@@ -1148,7 +1168,8 @@ test "help with no usage summary" {
     var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    try printHelp(Options, "test", test_buffer.writer());
+    var new_writer = test_buffer.writer().adaptToNewApi();
+    try printHelp(Options, "test", &new_writer.new_interface);
 
     const expected =
         \\Usage: test
@@ -1187,7 +1208,8 @@ test "help with wrapping" {
     var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    try printHelp(Options, "test", test_buffer.writer());
+    var new_writer = test_buffer.writer().adaptToNewApi();
+    try printHelp(Options, "test", &new_writer.new_interface);
 
     const expected =
         \\Usage: test
