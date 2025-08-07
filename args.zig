@@ -677,8 +677,9 @@ pub const ErrorHandling = union(enum) {
         switch (self) {
             .silent => return src_error,
             .print => {
-                var writer_buf: [2]u8 = undefined;
+                var writer_buf: [32]u8 = undefined;
                 var stderr = std.fs.File.stderr().writer(&writer_buf);
+                defer stderr.interface.flush() catch {};
                 try stderr.interface.print("{f}\n", .{err});
             },
             .collect => |collection| try collection.insert(err),
