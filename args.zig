@@ -110,7 +110,7 @@ fn parseInternal(
     errdefer result.arena.deinit();
     var result_arena_allocator = result.arena.allocator();
 
-    var arglist = std.ArrayList([:0]const u8).init(allocator);
+    var arglist = std.array_list.Managed([:0]const u8).init(allocator);
     defer arglist.deinit();
 
     var last_error: ?anyerror = null;
@@ -565,12 +565,12 @@ pub const ErrorCollection = struct {
     const Self = @This();
 
     arena: std.heap.ArenaAllocator,
-    list: std.ArrayList(Error),
+    list: std.array_list.Managed(Error),
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .arena = std.heap.ArenaAllocator.init(allocator),
-            .list = std.ArrayList(Error).init(allocator),
+            .list = std.array_list.Managed(Error).init(allocator),
         };
     }
 
@@ -1128,9 +1128,9 @@ test "full help" {
         };
     };
 
-    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    var test_buffer = std.array_list.Managed(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
-    var new_writer = test_buffer.writer().adaptToNewApi();
+    var new_writer = test_buffer.writer().adaptToNewApi(&.{});
 
     try printHelp(Options, "test", &new_writer.new_interface);
 
@@ -1166,10 +1166,10 @@ test "help with no usage summary" {
         };
     };
 
-    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    var test_buffer = std.array_list.Managed(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    var new_writer = test_buffer.writer().adaptToNewApi();
+    var new_writer = test_buffer.writer().adaptToNewApi(&.{});
     try printHelp(Options, "test", &new_writer.new_interface);
 
     const expected =
@@ -1206,10 +1206,10 @@ test "help with wrapping" {
         };
     };
 
-    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    var test_buffer = std.array_list.Managed(u8).init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    var new_writer = test_buffer.writer().adaptToNewApi();
+    var new_writer = test_buffer.writer().adaptToNewApi(&.{});
     try printHelp(Options, "test", &new_writer.new_interface);
 
     const expected =
