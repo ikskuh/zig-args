@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const ArrayList = std.array_list.Managed;
+
 /// Parses arguments for the given specification and our current process.
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
@@ -110,7 +112,7 @@ fn parseInternal(
     errdefer result.arena.deinit();
     var result_arena_allocator = result.arena.allocator();
 
-    var arglist = std.ArrayList([:0]const u8).init(allocator);
+    var arglist: ArrayList([:0]const u8) = .init(allocator);
     defer arglist.deinit();
 
     var last_error: ?anyerror = null;
@@ -565,12 +567,12 @@ pub const ErrorCollection = struct {
     const Self = @This();
 
     arena: std.heap.ArenaAllocator,
-    list: std.ArrayList(Error),
+    list: ArrayList(Error),
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
-            .arena = std.heap.ArenaAllocator.init(allocator),
-            .list = std.ArrayList(Error).init(allocator),
+            .arena = .init(allocator),
+            .list = .init(allocator),
         };
     }
 
@@ -1128,7 +1130,7 @@ test "full help" {
         };
     };
 
-    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    var test_buffer: ArrayList(u8) = .init(std.testing.allocator);
     defer test_buffer.deinit();
     var new_writer = test_buffer.writer().adaptToNewApi();
 
@@ -1166,7 +1168,7 @@ test "help with no usage summary" {
         };
     };
 
-    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    var test_buffer: ArrayList(u8) = .init(std.testing.allocator);
     defer test_buffer.deinit();
 
     var new_writer = test_buffer.writer().adaptToNewApi();
@@ -1206,7 +1208,7 @@ test "help with wrapping" {
         };
     };
 
-    var test_buffer = std.ArrayList(u8).init(std.testing.allocator);
+    var test_buffer: ArrayList(u8) = .init(std.testing.allocator);
     defer test_buffer.deinit();
 
     var new_writer = test_buffer.writer().adaptToNewApi();
