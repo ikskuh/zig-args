@@ -1130,11 +1130,10 @@ test "full help" {
         };
     };
 
-    var test_buffer: ArrayList(u8) = .init(std.testing.allocator);
-    defer test_buffer.deinit();
-    var new_writer = test_buffer.writer().adaptToNewApi();
+    var buffer: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer buffer.deinit();
 
-    try printHelp(Options, "test", &new_writer.new_interface);
+    try printHelp(Options, "test", &buffer.writer);
 
     const expected =
         \\Usage: test [--boolflag] [--stringflag]
@@ -1147,7 +1146,7 @@ test "full help" {
         \\
     ;
 
-    try std.testing.expectEqualStrings(expected, test_buffer.items);
+    try std.testing.expectEqualStrings(expected, buffer.written());
 }
 
 test "help with no usage summary" {
@@ -1168,11 +1167,10 @@ test "help with no usage summary" {
         };
     };
 
-    var test_buffer: ArrayList(u8) = .init(std.testing.allocator);
+    var test_buffer: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    var new_writer = test_buffer.writer().adaptToNewApi();
-    try printHelp(Options, "test", &new_writer.new_interface);
+    try printHelp(Options, "test", &test_buffer.writer);
 
     const expected =
         \\Usage: test
@@ -1185,7 +1183,7 @@ test "help with no usage summary" {
         \\
     ;
 
-    try std.testing.expectEqualStrings(expected, test_buffer.items);
+    try std.testing.expectEqualStrings(expected, test_buffer.written());
 }
 
 test "help with wrapping" {
@@ -1208,11 +1206,10 @@ test "help with wrapping" {
         };
     };
 
-    var test_buffer: ArrayList(u8) = .init(std.testing.allocator);
+    var test_buffer: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer test_buffer.deinit();
 
-    var new_writer = test_buffer.writer().adaptToNewApi();
-    try printHelp(Options, "test", &new_writer.new_interface);
+    try printHelp(Options, "test", &test_buffer.writer);
 
     const expected =
         \\Usage: test
@@ -1231,5 +1228,5 @@ test "help with wrapping" {
         \\
     ;
 
-    try std.testing.expectEqualStrings(expected, test_buffer.items);
+    try std.testing.expectEqualStrings(expected, test_buffer.written());
 }
