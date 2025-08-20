@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const ArrayList = std.array_list.Managed;
-
 /// Parses arguments for the given specification and our current process.
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
@@ -112,7 +110,7 @@ fn parseInternal(
     errdefer result.arena.deinit();
     var result_arena_allocator = result.arena.allocator();
 
-    var arglist: ArrayList([:0]const u8) = .init(allocator);
+    var arglist: std.array_list.Managed([:0]const u8) = .init(allocator);
     defer arglist.deinit();
 
     var last_error: ?anyerror = null;
@@ -567,17 +565,16 @@ pub const ErrorCollection = struct {
     const Self = @This();
 
     arena: std.heap.ArenaAllocator,
-    list: ArrayList(Error),
+    list: std.ArrayList(Error),
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .arena = .init(allocator),
-            .list = .init(allocator),
+            .list = .empty,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.list.deinit();
         self.arena.deinit();
         self.* = undefined;
     }
@@ -599,7 +596,7 @@ pub const ErrorCollection = struct {
                 .unknown, .out_of_memory, .unsupported, .invalid_placement, .missing_argument, .missing_executable_name, .unknown_verb => err.kind,
             },
         };
-        try self.list.append(dupe);
+        try self.list.append(self.arena.allocator(), dupe);
     }
 };
 
@@ -1130,10 +1127,10 @@ test "full help" {
         };
     };
 
-    var buffer: std.Io.Writer.Allocating = .init(std.testing.allocator);
-    defer buffer.deinit();
+    var test_buffer: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer test_buffer.deinit();
 
-    try printHelp(Options, "test", &buffer.writer);
+    try printHelp(Options, "test", &test_buffer.writer);
 
     const expected =
         \\Usage: test [--boolflag] [--stringflag]
@@ -1146,7 +1143,7 @@ test "full help" {
         \\
     ;
 
-    try std.testing.expectEqualStrings(expected, buffer.written());
+    try std.testing.expectEqualStrings(expected, test_buffer.written());
 }
 
 test "help with no usage summary" {
