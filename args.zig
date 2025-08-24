@@ -565,7 +565,7 @@ pub const ErrorCollection = struct {
     const Self = @This();
 
     arena: std.heap.ArenaAllocator,
-    list: std.ArrayList(Error),
+    list: std.array_list.Managed(Error),
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
