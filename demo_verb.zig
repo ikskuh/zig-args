@@ -3,6 +3,8 @@ const argsParser = @import("args");
 
 pub fn main() !u8 {
     const argsAllocator = std.heap.page_allocator;
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
 
     const options = argsParser.parseWithVerbForCurrentProcess(
         struct {
@@ -39,6 +41,7 @@ pub fn main() !u8 {
             forward: void,
             @"zero-sized": struct {},
         },
+        io,
         argsAllocator,
         .print,
     ) catch return 1;
