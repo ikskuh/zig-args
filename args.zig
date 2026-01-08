@@ -677,9 +677,13 @@ pub const ErrorHandling = union(enum) {
             .silent => return src_error,
             .print => {
                 var writer_buf: [32]u8 = undefined;
-                var stderr = std.fs.File.stderr().writer(&writer_buf);
-                defer stderr.interface.flush() catch {};
-                try stderr.interface.print("{f}\n", .{err});
+                const stderr = std.debug.lockStderr(&writer_buf);
+                const iface = stderr.terminal().writer;
+                defer {
+                    iface.flush() catch {};
+                    std.debug.unlockStderr();
+                }
+                try iface.print("{f}\n", .{err});
             },
             .collect => |collection| try collection.insert(err),
             .forward => |func| try func(err),
