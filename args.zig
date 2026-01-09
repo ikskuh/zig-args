@@ -4,11 +4,11 @@ const std = @import("std");
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
+pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, process_args: std.process.Args, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
     // Use argsWithAllocator for portability.
     // All data allocated by the ArgIterator is freed at the end of the function.
     // Data returned to the user is always duplicated using the allocator.
-    var args = try std.process.argsWithAllocator(allocator);
+    var args = try process_args.iterateAllocator(allocator);
     defer args.deinit();
 
     const executable_name = args.next() orelse {
