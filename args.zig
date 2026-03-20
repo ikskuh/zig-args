@@ -1024,6 +1024,68 @@ fn reserved_argument(arg: []const u8) bool {
     return std.mem.eql(u8, arg, "shorthands") or std.mem.eql(u8, arg, "meta");
 }
 
+fn printOptions(comptime Generic: type, comptime indent: []const u8, writer: *std.Io.Writer) !void {
+    const fields = std.meta.fields(Generic);
+    comptime var maxOptionLength = 0;
+    inline for (fields) |field| {
+        if (!reserved_argument(field.name)) {
+            if (!@hasField(@TypeOf(Generic.meta.option_docs), field.name)) {
+                @compileError("option_docs not specified for field: " ++ field.name);
+            }
+        }
+
+        if (field.name.len > maxOptionLength) {
+            maxOptionLength = field.name.len;
+        }
+    }
+
+    inline for (fields) |field| {
+        if (!reserved_argument(field.name)) {
+            if (@hasDecl(Generic, "shorthands")) {
+                var foundShorthand = false;
+                inline for (std.meta.fields(@TypeOf(Generic.shorthands))) |shorthand| {
+                    const option = @field(Generic.shorthands, shorthand.name);
+                    if (std.mem.eql(u8, option, field.name)) {
+                        try writer.print("{s}  -{s}, ", .{ indent, shorthand.name });
+                        foundShorthand = true;
+                    }
+                }
+                if (!foundShorthand)
+                    try writer.print("{s}      ", .{indent});
+            }
+            if (@hasDecl(Generic, "wrap_len")) {
+                var it = std.mem.splitScalar(u8, @field(Generic.meta.option_docs, field.name), ' ');
+                const threshold = Generic.wrap_len;
+                var line_len: usize = 0;
+                var newline = false;
+                var first = true;
+                while (it.next()) |word| {
+                    if (first) {
+                        const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}", .{maxOptionLength});
+                        try writer.print(fmtString, .{ field.name, word });
+                        first = false;
+                    } else if (newline) {
+                        const fmtString = std.fmt.comptimePrint("\n{s}{{s: <{}}} {{s}}", .{ indent, maxOptionLength + 10 });
+                        try writer.print(fmtString, .{ " ", word });
+                        newline = false;
+                    } else {
+                        try writer.print("{s} {s}", .{ indent, word });
+                    }
+                    line_len += word.len;
+                    if (line_len >= threshold) {
+                        newline = true;
+                        line_len = 0;
+                    }
+                }
+                try writer.writeByte('\n');
+            } else {
+                const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}\n", .{maxOptionLength});
+                try writer.print(fmtString, .{ field.name, @field(Generic.meta.option_docs, field.name) });
+            }
+        }
+    }
+}
+
 pub fn printHelp(comptime Generic: type, name: []const u8, writer: *std.Io.Writer) !void {
     if (!@hasDecl(Generic, "meta")) {
         @compileError("Missing meta declaration in Generic");
@@ -1043,66 +1105,47 @@ pub fn printHelp(comptime Generic: type, name: []const u8, writer: *std.Io.Write
     }
 
     if (@hasField(Meta, "option_docs")) {
-        const fields = std.meta.fields(Generic);
-
         try writer.print("Options:\n", .{});
-        comptime var maxOptionLength = 0;
-        inline for (fields) |field| {
-            if (!reserved_argument(field.name)) {
-                if (!@hasField(@TypeOf(Generic.meta.option_docs), field.name)) {
-                    @compileError("option_docs not specified for field: " ++ field.name);
-                }
-            }
+        try printOptions(Generic, "", writer);
+    }
+}
 
-            if (field.name.len > maxOptionLength) {
-                maxOptionLength = field.name.len;
-            }
+pub fn printHelpWithVerb(comptime Generic: type, comptime Verb: type, name: []const u8, writer: *std.Io.Writer) !void {
+    if (!@hasDecl(Generic, "meta")) {
+        @compileError("Missing meta declaration in Generic");
+    }
+
+    const Meta = @TypeOf(Generic.meta);
+
+    try writer.print("Usage: {s}", .{name});
+
+    if (@hasField(Meta, "usage_summary")) {
+        try writer.print(" {s}", .{Generic.meta.usage_summary});
+    }
+    try writer.print("\n\n", .{});
+
+    if (@hasField(Meta, "full_text")) {
+        try writer.print("{s}\n\n", .{Generic.meta.full_text});
+    }
+
+    if (@hasField(Meta, "option_docs")) {
+        try writer.print("General options:\n", .{});
+        try printOptions(Generic, "", writer);
+        try writer.print("\n", .{});
+    }
+
+    try writer.print("Verbs:\n", .{});
+    const verb_fields = std.meta.fields(Verb);
+    inline for (verb_fields, 0..) |verb_info, i| {
+        try writer.print("  {s}", .{verb_info.name});
+
+        const VerbMeta = @TypeOf(verb_info.type.meta);
+        if (@hasField(VerbMeta, "option_docs")) {
+            try writer.print(" options:\n", .{});
+            try printOptions(verb_info.type, "  ", writer);
         }
-
-        inline for (fields) |field| {
-            if (!reserved_argument(field.name)) {
-                if (@hasDecl(Generic, "shorthands")) {
-                    var foundShorthand = false;
-                    inline for (std.meta.fields(@TypeOf(Generic.shorthands))) |shorthand| {
-                        const option = @field(Generic.shorthands, shorthand.name);
-                        if (std.mem.eql(u8, option, field.name)) {
-                            try writer.print("  -{s}, ", .{shorthand.name});
-                            foundShorthand = true;
-                        }
-                    }
-                    if (!foundShorthand)
-                        try writer.print("      ", .{});
-                }
-                if (@hasDecl(Generic, "wrap_len")) {
-                    var it = std.mem.splitScalar(u8, @field(Generic.meta.option_docs, field.name), ' ');
-                    const threshold = Generic.wrap_len;
-                    var line_len: usize = 0;
-                    var newline = false;
-                    var first = true;
-                    while (it.next()) |word| {
-                        if (first) {
-                            const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}", .{maxOptionLength});
-                            try writer.print(fmtString, .{ field.name, word });
-                            first = false;
-                        } else if (newline) {
-                            const fmtString = std.fmt.comptimePrint("\n{{s: <{}}} {{s}}", .{maxOptionLength + 10});
-                            try writer.print(fmtString, .{ " ", word });
-                            newline = false;
-                        } else {
-                            try writer.print(" {s}", .{word});
-                        }
-                        line_len += word.len;
-                        if (line_len >= threshold) {
-                            newline = true;
-                            line_len = 0;
-                        }
-                    }
-                    try writer.writeByte('\n');
-                } else {
-                    const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}\n", .{maxOptionLength});
-                    try writer.print(fmtString, .{ field.name, @field(Generic.meta.option_docs, field.name) });
-                }
-            }
+        if (i < verb_fields.len - 1) {
+            try writer.print("\n", .{});
         }
     }
 }
@@ -1140,6 +1183,58 @@ test "full help" {
         \\Options:
         \\  -b, --boolflag     a boolean flag
         \\      --stringflag   a string flag
+        \\
+    ;
+
+    try std.testing.expectEqualStrings(expected, test_buffer.written());
+}
+
+test "full help with verb" {
+    const Options = struct {
+        boolflag: bool = false,
+        stringflag: []const u8 = "hello",
+
+        pub const shorthands = .{
+            .b = "boolflag",
+        };
+
+        pub const meta = .{
+            .name = "test",
+            .full_text = "testing tool",
+            .usage_summary = "[--boolflag] [--stringflag]",
+            .option_docs = .{
+                .boolflag = "a boolean flag",
+                .stringflag = "a string flag",
+            },
+        };
+    };
+    const Verb = union(enum) {
+        verb1: Options,
+        verb2: Options,
+    };
+
+    var test_buffer: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer test_buffer.deinit();
+
+    try printHelpWithVerb(Options, Verb, "test", &test_buffer.writer);
+
+    const expected =
+        \\Usage: test [--boolflag] [--stringflag]
+        \\
+        \\testing tool
+        \\
+        \\General options:
+        \\  -b, --boolflag     a boolean flag
+        \\      --stringflag   a string flag
+        \\
+        \\Verbs:
+        \\  verb1 options:
+        \\    -b, --boolflag     a boolean flag
+        \\        --stringflag   a string flag
+        \\
+        \\  verb2 options:
+        \\    -b, --boolflag     a boolean flag
+        \\        --stringflag   a string flag
         \\
     ;
 
