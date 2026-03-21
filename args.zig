@@ -1189,7 +1189,7 @@ test "full help" {
     try std.testing.expectEqualStrings(expected, test_buffer.written());
 }
 
-test "full help with verb" {
+test "full help (with verb)" {
     const Options = struct {
         boolflag: bool = false,
         stringflag: []const u8 = "hello",
@@ -1208,9 +1208,45 @@ test "full help with verb" {
             },
         };
     };
+    const OptionsVerb1 = struct {
+        boolflag1: bool = false,
+        stringflag1: []const u8 = "foo",
+
+        pub const shorthands = .{
+            .x = "boolflag1",
+        };
+
+        pub const meta = .{
+            .name = "verb1",
+            .full_text = "testing tool 1",
+            .usage_summary = "[--boolflag1] [--stringflag1]",
+            .option_docs = .{
+                .boolflag1 = "a boolean flag 1",
+                .stringflag1 = "a string flag 1",
+            },
+        };
+    };
+    const OptionsVerb2 = struct {
+        boolflag2: bool = false,
+        stringflag2: []const u8 = "bar",
+
+        pub const shorthands = .{
+            .y = "boolflag2",
+        };
+
+        pub const meta = .{
+            .name = "verb2",
+            .full_text = "testing tool 2",
+            .usage_summary = "[--boolflag2] [--stringflag2]",
+            .option_docs = .{
+                .boolflag2 = "a boolean flag 2",
+                .stringflag2 = "a string flag 2",
+            },
+        };
+    };
     const Verb = union(enum) {
-        verb1: Options,
-        verb2: Options,
+        verb1: OptionsVerb1,
+        verb2: OptionsVerb2,
     };
 
     var test_buffer: std.Io.Writer.Allocating = .init(std.testing.allocator);
@@ -1229,12 +1265,12 @@ test "full help with verb" {
         \\
         \\Verbs:
         \\  verb1 options:
-        \\    -b, --boolflag     a boolean flag
-        \\        --stringflag   a string flag
+        \\    -x, --boolflag1     a boolean flag 1
+        \\        --stringflag1   a string flag 1
         \\
         \\  verb2 options:
-        \\    -b, --boolflag     a boolean flag
-        \\        --stringflag   a string flag
+        \\    -y, --boolflag2     a boolean flag 2
+        \\        --stringflag2   a string flag 2
         \\
     ;
 
