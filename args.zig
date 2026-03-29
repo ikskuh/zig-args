@@ -4,7 +4,7 @@ const std = @import("std");
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
+pub fn parseForCurrentProcess(comptime Spec: type, io: std.Io, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
     // Use argsWithAllocator for portability.
     // All data allocated by the ArgIterator is freed at the end of the function.
     // Data returned to the user is always duplicated using the allocator.
@@ -12,7 +12,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
     defer args.deinit();
 
     const executable_name = args.next() orelse {
-        try error_handling.process(error.NoExecutableName, Error{
+        try error_handling.process(io, error.NoExecutableName, Error{
             .option = "",
             .kind = .missing_executable_name,
         });
@@ -21,7 +21,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
         return error.NoExecutableName;
     };
 
-    var result = try parseInternal(Spec, null, &args, allocator, error_handling);
+    var result = try parseInternal(Spec, null, io, &args, allocator, error_handling);
 
     result.executable_name = try allocator.dupeZ(u8, executable_name);
 
@@ -32,7 +32,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
+pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, io: std.Io, allocator: std.mem.Allocator, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
     // Use argsWithAllocator for portability.
     // All data allocated by the ArgIterator is freed at the end of the function.
     // Data returned to the user is always duplicated using the allocator.
@@ -40,7 +40,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
     defer args.deinit();
 
     const executable_name = args.next() orelse {
-        try error_handling.process(error.NoExecutableName, Error{
+        try error_handling.process(io, error.NoExecutableName, Error{
             .option = "",
             .kind = .missing_executable_name,
         });
@@ -49,7 +49,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
         return error.NoExecutableName;
     };
 
-    var result = try parseInternal(Spec, Verb, &args, allocator, error_handling);
+    var result = try parseInternal(Spec, Verb, io, &args, allocator, error_handling);
 
     result.executable_name = try allocator.dupeZ(u8, executable_name);
 
@@ -96,6 +96,7 @@ pub fn parseWithVerb(
 fn parseInternal(
     comptime Generic: type,
     comptime MaybeVerb: ?type,
+    io: std.Io,
     args_iterator: anytype,
     allocator: std.mem.Allocator,
     comptime error_handling: ErrorHandling,
@@ -142,7 +143,7 @@ fn parseInternal(
             var found = false;
             inline for (std.meta.fields(Generic)) |fld| {
                 if (std.mem.eql(u8, pair.name, fld.name)) {
-                    try parseOption(Generic, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, fld.name, pair.value);
+                    try parseOption(Generic, io, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, fld.name, pair.value);
                     found = true;
                 }
             }
@@ -158,6 +159,7 @@ fn parseInternal(
                                         if (std.mem.eql(u8, pair.name, fld.name)) {
                                             try parseOption(
                                                 verb_info.type,
+                                                io,
                                                 result_arena_allocator,
                                                 &@field(verb.*, verb_info.name),
                                                 args_iterator,
@@ -178,7 +180,7 @@ fn parseInternal(
 
             if (!found) {
                 last_error = error.EncounteredUnknownArgument;
-                try error_handling.process(error.EncounteredUnknownArgument, Error{
+                try error_handling.process(io, error.EncounteredUnknownArgument, Error{
                     .option = pair.name,
                     .kind = .unknown,
                 });
@@ -204,12 +206,12 @@ fn parseInternal(
                                 // -2 because we stripped of the "-" at the beginning
                                 if (requiresArg(real_fld_type) and index != item.len - 2) {
                                     last_error = error.EncounteredUnexpectedArgument;
-                                    try error_handling.process(error.EncounteredUnexpectedArgument, Error{
+                                    try error_handling.process(io, error.EncounteredUnexpectedArgument, Error{
                                         .option = &option_name,
                                         .kind = .invalid_placement,
                                     });
                                 } else {
-                                    try parseOption(Generic, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, real_name, null);
+                                    try parseOption(Generic, io, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, real_name, null);
                                 }
 
                                 found = true;
@@ -238,12 +240,12 @@ fn parseInternal(
                                                         // -2 because we stripped of the "-" at the beginning
                                                         if (requiresArg(real_fld_type) and index != item.len - 2) {
                                                             last_error = error.EncounteredUnexpectedArgument;
-                                                            try error_handling.process(error.EncounteredUnexpectedArgument, Error{
+                                                            try error_handling.process(io, error.EncounteredUnexpectedArgument, Error{
                                                                 .option = &option_name,
                                                                 .kind = .invalid_placement,
                                                             });
                                                         } else {
-                                                            try parseOption(VerbType, result_arena_allocator, target_value, args_iterator, error_handling, &last_error, real_name, null);
+                                                            try parseOption(VerbType, io, result_arena_allocator, target_value, args_iterator, error_handling, &last_error, real_name, null);
                                                         }
                                                         last_error = null; // we need to reset that error here, as it was set previously
                                                         found = true;
@@ -258,14 +260,14 @@ fn parseInternal(
                     }
                     if (!found) {
                         last_error = error.EncounteredUnknownArgument;
-                        try error_handling.process(error.EncounteredUnknownArgument, Error{
+                        try error_handling.process(io, error.EncounteredUnknownArgument, Error{
                             .option = &option_name,
                             .kind = .unknown,
                         });
                     }
                 }
                 if (!any_shorthands) {
-                    try error_handling.process(error.EncounteredUnsupportedArgument, Error{
+                    try error_handling.process(io, error.EncounteredUnsupportedArgument, Error{
                         .option = item,
                         .kind = .unsupported,
                     });
@@ -282,7 +284,7 @@ fn parseInternal(
                     }
 
                     if (result.verb == null) {
-                        try error_handling.process(error.EncounteredUnknownVerb, Error{
+                        try error_handling.process(io, error.EncounteredUnknownVerb, Error{
                             .option = item,
                             .kind = .unknown_verb,
                         });
@@ -513,6 +515,7 @@ fn convertArgumentValue(comptime T: type, allocator: std.mem.Allocator, textInpu
 /// Parses an option value into the correct type.
 fn parseOption(
     comptime Spec: type,
+    io: std.Io,
     arena: std.mem.Allocator,
     target_struct: *Spec,
     args: anytype,
@@ -534,7 +537,7 @@ fn parseOption(
         const val = args.next();
         if (val == null or std.mem.eql(u8, val.?, "--")) {
             last_error.* = error.MissingArgument;
-            try error_handling.process(error.MissingArgument, Error{
+            try error_handling.process(io, error.MissingArgument, Error{
                 .option = "--" ++ name,
                 .kind = .missing_argument,
             });
@@ -550,7 +553,7 @@ fn parseOption(
 
     @field(target_struct, name) = convertArgumentValue(field_type, arena, final_value) catch |err| {
         last_error.* = err;
-        try error_handling.process(err, Error{
+        try error_handling.process(io, err, Error{
             .option = "--" ++ name,
             .kind = .{ .invalid_value = final_value },
         });
@@ -670,14 +673,14 @@ pub const ErrorHandling = union(enum) {
     forward: *const fn (err: Error) anyerror!void,
 
     /// Processes an error with the given handling method.
-    fn process(comptime self: Self, src_error: anytype, err: Error) !void {
+    fn process(comptime self: Self, io: std.Io, src_error: anytype, err: Error) !void {
         if (@typeInfo(@TypeOf(src_error)) != .error_set)
             @compileError("src_error must be a error union!");
         switch (self) {
             .silent => return src_error,
             .print => {
                 var writer_buf: [32]u8 = undefined;
-                var stderr = std.fs.File.stderr().writer(&writer_buf);
+                var stderr = std.Io.File.stderr().writer(io, &writer_buf);
                 defer stderr.interface.flush() catch {};
                 try stderr.interface.print("{f}\n", .{err});
             },
@@ -779,7 +782,7 @@ test "basic parsing (no verbs)" {
         "special",
         "positional 2",
     });
-    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .print);
+    var args = try parseInternal(TestGenericOptions, null, std.testing.io, &titerator, std.testing.allocator, .print);
     defer args.deinit();
 
     try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
@@ -815,7 +818,7 @@ test "shorthand parsing (no verbs)" {
         "special",
         "positional 2",
     });
-    var args = try parseInternal(TestGenericOptions, null, &titerator, std.testing.allocator, .print);
+    var args = try parseInternal(TestGenericOptions, null, std.testing.io, &titerator, std.testing.allocator, .print);
     defer args.deinit();
 
     try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
@@ -853,7 +856,7 @@ test "basic parsing (with verbs)" {
         "positional 2",
         "--cocktail",
     });
-    var args = try parseInternal(TestGenericOptions, TestVerb, &titerator, std.testing.allocator, .print);
+    var args = try parseInternal(TestGenericOptions, TestVerb, std.testing.io, &titerator, std.testing.allocator, .print);
     defer args.deinit();
 
     try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
@@ -890,6 +893,7 @@ test "basic error handling (with verbs)" {
         const args = parseInternal(
             TestGenericOptions,
             TestVerb,
+            std.testing.io,
             &titerator,
             std.testing.allocator,
             .silent,
@@ -906,6 +910,7 @@ test "basic error handling (with verbs)" {
         const args = parseInternal(
             TestGenericOptions,
             TestVerb,
+            std.testing.io,
             &titerator,
             std.testing.allocator,
             .{ .collect = &ec },
@@ -935,7 +940,7 @@ test "shorthand parsing (with verbs)" {
         "positional 2",
         "-c", // --cocktail
     });
-    var args = try parseInternal(TestGenericOptions, TestVerb, &titerator, std.testing.allocator, .print);
+    var args = try parseInternal(TestGenericOptions, TestVerb, std.testing.io, &titerator, std.testing.allocator, .print);
     defer args.deinit();
 
     try std.testing.expectEqual(@as(?[:0]const u8, null), args.executable_name);
@@ -974,6 +979,7 @@ test "strings with sentinel" {
             output: ?[:0]const u8 = null,
         },
         null,
+        std.testing.io,
         &titerator,
         std.testing.allocator,
         .print,
@@ -998,6 +1004,7 @@ test "option argument --" {
             output: ?[:0]const u8 = null,
         },
         null,
+        std.testing.io,
         &titerator,
         std.testing.allocator,
         .silent,
@@ -1010,6 +1017,7 @@ test "index of raw indicator --" {
     var args = try parseInternal(
         struct {},
         null,
+        std.testing.io,
         &titerator,
         std.testing.allocator,
         .print,
