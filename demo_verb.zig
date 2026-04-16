@@ -1,47 +1,46 @@
 const std = @import("std");
 const argsParser = @import("args");
 
-pub fn main() !u8 {
+const Options =  struct {
+    // this declares long option that can come before or after verb
+    output: ?[]const u8 = null,
+
+    // This declares short-hand options for single hyphen
+    pub const shorthands = .{
+        .o = "output",
+    };
+};
+
+const Verbs = union(enum) {
+    compact: struct {
+        // This declares long options for double hyphen
+        host: ?[]const u8 = null,
+        port: u16 = 3420,
+        mode: enum { default, special, slow, fast } = .default,
+
+        // This declares short-hand options for single hyphen
+        pub const shorthands = .{
+            .H = "host",
+            .p = "port",
+        };
+    },
+    reload: struct {
+        // This declares long options for double hyphen
+        force: bool = false,
+
+        // This declares short-hand options for single hyphen
+        pub const shorthands = .{
+            .f = "force",
+        };
+    },
+    forward: void,
+    @"zero-sized": struct {},
+};
+
+pub fn main(init: std.process.Init) !u8 {
     const argsAllocator = std.heap.page_allocator;
 
-    const options = argsParser.parseWithVerbForCurrentProcess(
-        struct {
-            // this declares long option that can come before or after verb
-            output: ?[]const u8 = null,
-
-            // This declares short-hand options for single hyphen
-            pub const shorthands = .{
-                .o = "output",
-            };
-        },
-        union(enum) {
-            compact: struct {
-                // This declares long options for double hyphen
-                host: ?[]const u8 = null,
-                port: u16 = 3420,
-                mode: enum { default, special, slow, fast } = .default,
-
-                // This declares short-hand options for single hyphen
-                pub const shorthands = .{
-                    .H = "host",
-                    .p = "port",
-                };
-            },
-            reload: struct {
-                // This declares long options for double hyphen
-                force: bool = false,
-
-                // This declares short-hand options for single hyphen
-                pub const shorthands = .{
-                    .f = "force",
-                };
-            },
-            forward: void,
-            @"zero-sized": struct {},
-        },
-        argsAllocator,
-        .print,
-    ) catch return 1;
+    const options = argsParser.parseWithVerbForCurrentProcess(Options, Verbs, init.arena, init.minimal.args, .print) catch return 1;
     defer options.deinit();
 
     std.debug.print("executable name: {?s}\n", .{options.executable_name});
