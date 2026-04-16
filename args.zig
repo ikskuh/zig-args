@@ -4,11 +4,11 @@ const std = @import("std");
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator, process_args: std.process.Args, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
+pub fn parseForCurrentProcess(comptime Spec: type, init: std.process.Init, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, null) {
     // Use argsWithAllocator for portability.
     // All data allocated by the ArgIterator is freed at the end of the function.
     // Data returned to the user is always duplicated using the allocator.
-    var args = try process_args.iterateAllocator(allocator);
+    var args = try init.minimal.args.iterateAllocator(init.arena.allocator());
     defer args.deinit();
 
     const executable_name = args.next() orelse {
@@ -21,9 +21,10 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
         return error.NoExecutableName;
     };
 
-    var result = try parseInternal(Spec, null, &args, allocator, error_handling);
+    var result = try parseInternal(Spec, null, &args, init.arena.allocator(), error_handling);
+    errdefer result.deinit();
 
-    result.executable_name = try allocator.dupeZ(u8, executable_name);
+    result.executable_name = try init.arena.allocator().dupeZ(u8, executable_name);
 
     return result;
 }
@@ -32,11 +33,11 @@ pub fn parseForCurrentProcess(comptime Spec: type, allocator: std.mem.Allocator,
 /// - `Spec` is the configuration of the arguments.
 /// - `allocator` is the allocator that is used to allocate all required memory
 /// - `error_handling` defines how parser errors will be handled.
-pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, allocator: std.mem.Allocator, process_args: std.process.Args, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
+pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, init: std.process.Init, comptime error_handling: ErrorHandling) !ParseArgsResult(Spec, Verb) {
     // Use argsWithAllocator for portability.
     // All data allocated by the ArgIterator is freed at the end of the function.
     // Data returned to the user is always duplicated using the allocator.
-    var args = try process_args.iterateAllocator(allocator);
+    var args = try init.minimal.args.iterateAllocator(init.arena.allocator());
     defer args.deinit();
 
     const executable_name = args.next() orelse {
@@ -49,9 +50,10 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
         return error.NoExecutableName;
     };
 
-    var result = try parseInternal(Spec, Verb, &args, allocator, error_handling);
+    var result = try parseInternal(Spec, Verb, &args, init.arena.allocator(), error_handling);
+    errdefer result.deinit();
 
-    result.executable_name = try allocator.dupeZ(u8, executable_name);
+    result.executable_name = try init.arena.allocator().dupeZ(u8, executable_name);
 
     return result;
 }

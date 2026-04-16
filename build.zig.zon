@@ -10,5 +10,6 @@
         "args.zig",
         "demo.zig",
         "demo_verb.zig",
+        "LICENCE",
     },
 }
