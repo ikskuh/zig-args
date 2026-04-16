@@ -128,7 +128,7 @@ fn parseInternal(
                 value: ?[]const u8,
             };
 
-            const pair = if (std.mem.indexOf(u8, item, "=")) |index|
+            const pair = if (std.mem.findScalar(u8, item, '=')) |index|
                 Pair{
                     .name = item[2..index],
                     .value = item[index + 1 ..],
