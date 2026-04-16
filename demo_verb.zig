@@ -38,7 +38,7 @@ const Verbs = union(enum) {
 };
 
 pub fn main(init: std.process.Init) !u8 {
-    const options = argsParser.parseWithVerbForCurrentProcess(Options, Verbs, init.arena.allocator(), init.minimal.args, .print) catch return 1;
+    const options = argsParser.parseWithVerbForCurrentProcess(Options, Verbs, init, .print) catch return 1;
     defer options.deinit();
 
     std.debug.print("executable name: {?s}\n", .{options.executable_name});
