@@ -37,7 +37,7 @@ const Options = struct {
 };
 
 pub fn main(init: std.process.Init) !u8 {
-    const options = argsParser.parseForCurrentProcess(Options, init.arena, init.minimal.args, .print) catch return 1;
+    const options = argsParser.parseForCurrentProcess(Options, init.arena.allocator(), init.minimal.args, .print) catch return 1;
     defer options.deinit();
 
     std.debug.print("executable name: {?s}\n", .{options.executable_name});
@@ -56,7 +56,7 @@ pub fn main(init: std.process.Init) !u8 {
     }
 
     var writer_buf: [128]u8 = undefined;
-    var stdout = std.fs.File.stdout().writer(&writer_buf);
+    var stdout = std.Io.File.stdout().writer(init.io, &writer_buf);
     defer stdout.interface.flush() catch unreachable;
     try argsParser.printHelp(Options, options.executable_name orelse "demo", &stdout.interface);
     return 0;
