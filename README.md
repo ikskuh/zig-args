@@ -62,7 +62,7 @@ const Options = struct {
 };
 
 pub fn main(init: std.process.Init) !u8 {
-    const options = argsParser.parseForCurrentProcess(, argsAllocator, .print) catch return 1;
+    const options = argsParser.parseForCurrentProcess(Options, init, .print) catch return 1;
     defer options.deinit();
 
     std.debug.print("executable name: {?s}\n", .{options.executable_name});
