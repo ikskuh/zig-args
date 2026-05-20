@@ -24,7 +24,7 @@ pub fn parseForCurrentProcess(comptime Spec: type, init: std.process.Init, compt
     var result = try parseInternal(Spec, null, &args, init.arena.allocator(), error_handling);
     errdefer result.deinit();
 
-    result.executable_name = try init.arena.allocator().dupeZ(u8, executable_name);
+    result.executable_name = try init.arena.allocator().dupeSentinel(u8, executable_name, 0);
 
     return result;
 }
@@ -53,7 +53,7 @@ pub fn parseWithVerbForCurrentProcess(comptime Spec: type, comptime Verb: type, 
     var result = try parseInternal(Spec, Verb, &args, init.arena.allocator(), error_handling);
     errdefer result.deinit();
 
-    result.executable_name = try init.arena.allocator().dupeZ(u8, executable_name);
+    result.executable_name = try init.arena.allocator().dupeSentinel(u8, executable_name, 0);
 
     return result;
 }
@@ -188,7 +188,7 @@ fn parseInternal(
         } else if (std.mem.startsWith(u8, item, "-")) {
             if (std.mem.eql(u8, item, "-")) {
                 // single hyphen is considered a positional argument
-                try arglist.append(try result_arena_allocator.dupeZ(u8, item));
+                try arglist.append(try result_arena_allocator.dupeSentinel(u8, item, 0));
             } else {
                 var any_shorthands = false;
                 for (item[1..], 0..) |char, index| {
@@ -294,7 +294,7 @@ fn parseInternal(
                 }
             }
 
-            try arglist.append(try result_arena_allocator.dupeZ(u8, item));
+            try arglist.append(try result_arena_allocator.dupeSentinel(u8, item, 0));
         }
     }
 
@@ -309,7 +309,7 @@ fn parseInternal(
     // This will consume the rest of the arguments as positional ones.
     // Only executes when the above loop is broken.
     while (args_iterator.next()) |item| {
-        try arglist.append(try result_arena_allocator.dupeZ(u8, item));
+        try arglist.append(try result_arena_allocator.dupeSentinel(u8, item, 0));
     }
 
     result.positionals = try arglist.toOwnedSlice();
@@ -494,7 +494,7 @@ fn convertArgumentValue(comptime T: type, allocator: std.mem.Allocator, textInpu
                 }
 
                 // If the type contains a sentinel dupe the text input to a new buffer.
-                // This is equivalent to allocator.dupeZ but works with any sentinel.
+                // This is equivalent to allocator.dupeSentinel but works with any sentinel.
                 if (comptime std.meta.sentinel(T)) |sentinel| {
                     const data = try allocator.alloc(u8, textInput.len + 1);
                     @memcpy(data[0..textInput.len], textInput);
@@ -529,7 +529,7 @@ fn parseOption(
 
     const final_value = if (value) |val| blk: {
         // use the literal value
-        const res = try arena.dupeZ(u8, val);
+        const res = try arena.dupeSentinel(u8, val, 0);
         break :blk res;
     } else if (requiresArg(field_type)) blk: {
         // fetch from parser
@@ -543,7 +543,7 @@ fn parseOption(
             return;
         }
 
-        const res = try arena.dupeZ(u8, val.?);
+        const res = try arena.dupeSentinel(u8, val.?, 0);
         break :blk res;
     } else blk: {
         // argument is "empty"
