@@ -44,28 +44,28 @@ pub fn main(init: std.process.Init) !u8 {
     std.debug.print("executable name: {?s}\n", .{options.executable_name});
 
     // non-verb/global options
-    inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
+    inline for (comptime std.meta.fieldNames(@TypeOf(options.options))) |fld_name| {
         std.debug.print("\t{s} = {any}\n", .{
-            fld.name,
-            @field(options.options, fld.name),
+            fld_name,
+            @field(options.options, fld_name),
         });
     }
     // verb options
     if (options.verb) |verb| {
         switch (verb) {
             .compact => |opts| {
-                inline for (std.meta.fields(@TypeOf(opts))) |fld| {
+                inline for (comptime std.meta.fieldNames(@TypeOf(opts))) |fld_name| {
                     std.debug.print("\t{s} = {any}\n", .{
-                        fld.name,
-                        @field(opts, fld.name),
+                        fld_name,
+                        @field(opts, fld_name),
                     });
                 }
             },
             .reload => |opts| {
-                inline for (std.meta.fields(@TypeOf(opts))) |fld| {
+                inline for (comptime std.meta.fieldNames(@TypeOf(opts))) |fld_name| {
                     std.debug.print("\t{s} = {any}\n", .{
-                        fld.name,
-                        @field(opts, fld.name),
+                        fld_name,
+                        @field(opts, fld_name),
                     });
                 }
             },

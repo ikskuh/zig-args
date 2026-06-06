@@ -142,9 +142,9 @@ fn parseInternal(
                 };
 
             var found = false;
-            inline for (std.meta.fields(Generic)) |fld| {
-                if (std.mem.eql(u8, pair.name, fld.name)) {
-                    try parseOption(Generic, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, fld.name, pair.value);
+            inline for (comptime std.meta.fieldNames(Generic)) |fld_name| {
+                if (std.mem.eql(u8, pair.name, fld_name)) {
+                    try parseOption(Generic, result_arena_allocator, &result.options, args_iterator, error_handling, &last_error, fld_name, pair.value);
                     found = true;
                 }
             }
@@ -153,19 +153,19 @@ fn parseInternal(
                 if (result.verb) |*verb| {
                     if (!found) {
                         const Tag = std.meta.Tag(Verb);
-                        inline for (std.meta.fields(Verb)) |verb_info| {
-                            if (verb.* == @field(Tag, verb_info.name)) {
-                                if (comptime canHaveFieldsAndIsNotZeroSized(verb_info.type)) {
-                                    inline for (std.meta.fields(verb_info.type)) |fld| {
-                                        if (std.mem.eql(u8, pair.name, fld.name)) {
+                        inline for (comptime std.meta.fieldNames(Verb), comptime std.meta.fieldTypes(Verb)) |verb_name, verb_type| {
+                            if (verb.* == @field(Tag, verb_name)) {
+                                if (comptime canHaveFieldsAndIsNotZeroSized(verb_type)) {
+                                    inline for (comptime std.meta.fieldNames(verb_type)) |fld_name| {
+                                        if (std.mem.eql(u8, pair.name, fld_name)) {
                                             try parseOption(
-                                                verb_info.type,
+                                                verb_type,
                                                 result_arena_allocator,
-                                                &@field(verb.*, verb_info.name),
+                                                &@field(verb.*, verb_name),
                                                 args_iterator,
                                                 error_handling,
                                                 &last_error,
-                                                fld.name,
+                                                fld_name,
                                                 pair.value,
                                             );
                                             found = true;
@@ -196,11 +196,11 @@ fn parseInternal(
                     var found = false;
                     if (@hasDecl(Generic, "shorthands")) {
                         any_shorthands = true;
-                        inline for (std.meta.fields(@TypeOf(Generic.shorthands))) |fld| {
-                            if (fld.name.len != 1)
+                        inline for (comptime std.meta.fieldNames(@TypeOf(Generic.shorthands))) |fld_name| {
+                            if (fld_name.len != 1)
                                 @compileError("All shorthand fields must be exactly one character long!");
-                            if (fld.name[0] == char) {
-                                const real_name = @field(Generic.shorthands, fld.name);
+                            if (fld_name[0] == char) {
+                                const real_name = @field(Generic.shorthands, fld_name);
                                 const real_fld_type = @TypeOf(@field(result.options, real_name));
 
                                 // -2 because we stripped of the "-" at the beginning
@@ -223,18 +223,17 @@ fn parseInternal(
                         if (result.verb) |*verb| {
                             if (!found) {
                                 const Tag = std.meta.Tag(Verb);
-                                inline for (std.meta.fields(Verb)) |verb_info| {
-                                    const VerbType = verb_info.type;
+                                inline for (comptime std.meta.fieldNames(Verb), comptime std.meta.fieldTypes(Verb)) |verb_name, VerbType| {
                                     if (comptime canHaveFieldsAndIsNotZeroSized(VerbType)) {
-                                        if (verb.* == @field(Tag, verb_info.name)) {
-                                            const target_value = &@field(verb.*, verb_info.name);
+                                        if (verb.* == @field(Tag, verb_name)) {
+                                            const target_value = &@field(verb.*, verb_name);
                                             if (@hasDecl(VerbType, "shorthands")) {
                                                 any_shorthands = true;
-                                                inline for (std.meta.fields(@TypeOf(VerbType.shorthands))) |fld| {
-                                                    if (fld.name.len != 1)
+                                                inline for (comptime std.meta.fieldNames(@TypeOf(VerbType.shorthands))) |fld_name| {
+                                                    if (fld_name.len != 1)
                                                         @compileError("All shorthand fields must be exactly one character long!");
-                                                    if (fld.name[0] == char) {
-                                                        const real_name = @field(VerbType.shorthands, fld.name);
+                                                    if (fld_name[0] == char) {
+                                                        const real_name = @field(VerbType.shorthands, fld_name);
                                                         const real_fld_type = @TypeOf(@field(target_value.*, real_name));
 
                                                         // -2 because we stripped of the "-" at the beginning
@@ -276,10 +275,10 @@ fn parseInternal(
         } else {
             if (MaybeVerb) |Verb| {
                 if (result.verb == null) {
-                    inline for (std.meta.fields(Verb)) |fld| {
-                        if (std.mem.eql(u8, item, fld.name)) {
+                    inline for (comptime std.meta.fieldNames(Verb), comptime std.meta.fieldTypes(Verb)) |fld_name, FldType| {
+                        if (std.mem.eql(u8, item, fld_name)) {
                             // found active verb, default-initialize it
-                            result.verb = @unionInit(Verb, fld.name, fld.type{});
+                            result.verb = @unionInit(Verb, fld_name, if (FldType != void) .{} else {});
                         }
                     }
 
@@ -1031,28 +1030,28 @@ fn reserved_argument(arg: []const u8) bool {
 }
 
 fn printOptions(comptime Generic: type, comptime indent: []const u8, writer: *std.Io.Writer) !void {
-    const fields = std.meta.fields(Generic);
+    const field_names = comptime std.meta.fieldNames(Generic);
     comptime var maxOptionLength = 0;
-    inline for (fields) |field| {
-        if (!reserved_argument(field.name)) {
-            if (!@hasField(@TypeOf(Generic.meta.option_docs), field.name)) {
-                @compileError("option_docs not specified for field: " ++ field.name);
+    inline for (field_names) |field_name| {
+        if (!reserved_argument(field_name)) {
+            if (!@hasField(@TypeOf(Generic.meta.option_docs), field_name)) {
+                @compileError("option_docs not specified for field: " ++ field_name);
             }
         }
 
-        if (field.name.len > maxOptionLength) {
-            maxOptionLength = field.name.len;
+        if (field_name.len > maxOptionLength) {
+            maxOptionLength = field_name.len;
         }
     }
 
-    inline for (fields) |field| {
-        if (!reserved_argument(field.name)) {
+    inline for (field_names) |field_name| {
+        if (!reserved_argument(field_name)) {
             if (@hasDecl(Generic, "shorthands")) {
                 var foundShorthand = false;
-                inline for (std.meta.fields(@TypeOf(Generic.shorthands))) |shorthand| {
-                    const option = @field(Generic.shorthands, shorthand.name);
-                    if (std.mem.eql(u8, option, field.name)) {
-                        try writer.print("{s}  -{s}, ", .{ indent, shorthand.name });
+                inline for (comptime std.meta.fieldNames(@TypeOf(Generic.shorthands))) |shorthand_name| {
+                    const option = @field(Generic.shorthands, shorthand_name);
+                    if (std.mem.eql(u8, option, field_name)) {
+                        try writer.print("{s}  -{s}, ", .{ indent, shorthand_name });
                         foundShorthand = true;
                     }
                 }
@@ -1060,7 +1059,7 @@ fn printOptions(comptime Generic: type, comptime indent: []const u8, writer: *st
                     try writer.print("{s}      ", .{indent});
             }
             if (@hasDecl(Generic, "wrap_len")) {
-                var it = std.mem.splitScalar(u8, @field(Generic.meta.option_docs, field.name), ' ');
+                var it = std.mem.splitScalar(u8, @field(Generic.meta.option_docs, field_name), ' ');
                 const threshold = Generic.wrap_len;
                 var line_len: usize = 0;
                 var newline = false;
@@ -1068,7 +1067,7 @@ fn printOptions(comptime Generic: type, comptime indent: []const u8, writer: *st
                 while (it.next()) |word| {
                     if (first) {
                         const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}", .{maxOptionLength});
-                        try writer.print(fmtString, .{ field.name, word });
+                        try writer.print(fmtString, .{ field_name, word });
                         first = false;
                     } else if (newline) {
                         const fmtString = std.fmt.comptimePrint("\n{s}{{s: <{}}} {{s}}", .{ indent, maxOptionLength + 10 });
@@ -1086,7 +1085,7 @@ fn printOptions(comptime Generic: type, comptime indent: []const u8, writer: *st
                 try writer.writeByte('\n');
             } else {
                 const fmtString = std.fmt.comptimePrint("--{{s: <{}}}   {{s}}\n", .{maxOptionLength});
-                try writer.print(fmtString, .{ field.name, @field(Generic.meta.option_docs, field.name) });
+                try writer.print(fmtString, .{ field_name, @field(Generic.meta.option_docs, field_name) });
             }
         }
     }
@@ -1141,16 +1140,17 @@ pub fn printHelpWithVerb(comptime Generic: type, comptime Verb: type, name: []co
     }
 
     try writer.print("Verbs:\n", .{});
-    const verb_fields = std.meta.fields(Verb);
-    inline for (verb_fields, 0..) |verb_info, i| {
-        try writer.print("  {s}", .{verb_info.name});
+    const verb_field_names = comptime std.meta.fieldNames(Verb);
+    const verb_field_types = comptime std.meta.fieldTypes(Verb);
+    inline for (verb_field_names, verb_field_types, 0..) |verb_name, verb_type, i| {
+        try writer.print("  {s}", .{verb_name});
 
-        const VerbMeta = @TypeOf(verb_info.type.meta);
+        const VerbMeta = @TypeOf(verb_type.meta);
         if (@hasField(VerbMeta, "option_docs")) {
             try writer.print(" options:\n", .{});
-            try printOptions(verb_info.type, "  ", writer);
+            try printOptions(verb_type, "  ", writer);
         }
-        if (i < verb_fields.len - 1) {
+        if (i < verb_field_names.len - 1) {
             try writer.print("\n", .{});
         }
     }
