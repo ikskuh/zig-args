@@ -43,10 +43,10 @@ pub fn main(init: std.process.Init) !u8 {
     std.debug.print("executable name: {?s}\n", .{options.executable_name});
 
     std.debug.print("parsed options:\n", .{});
-    inline for (std.meta.fields(@TypeOf(options.options))) |fld| {
+    inline for (comptime std.meta.fieldNames(@TypeOf(options.options))) |fld_name| {
         std.debug.print("\t{s} = {any}\n", .{
-            fld.name,
-            @field(options.options, fld.name),
+            fld_name,
+            @field(options.options, fld_name),
         });
     }
 
